@@ -16,18 +16,22 @@ BUILD_DIR = build
 OBJ_DIR   = obj
 BIN_DIR   = bin
 
-SOURCES := $(wildcard $(SRC_DIR)/*/*.c) $(wildcard $(CUR_DIR)/src/*.c)
+SOURCES := $(wildcard $(SRC_DIR)/*/*.c)
+SOURCES += $(wildcard $(SRC_DIR)/utilities/linkedlist/*.c)
+SOURCES += $(wildcard $(CUR_DIR)/src/*.c)
 SOURCES := $(filter-out $(SRC_DIR)/application/application.c, $(SOURCES))
 
-OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/$(OBJ_DIR)/%.o, $(SOURCES))
+OBJECTS := $(filter-out $(CUR_DIR)/src/%.c, $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/$(OBJ_DIR)/%.o, $(SOURCES)))
+OBJECTS += $(patsubst $(CUR_DIR)/src/%.c, $(BUILD_DIR)/$(OBJ_DIR)/%.o, $(filter $(CUR_DIR)/src/%.c, $(SOURCES)))
 
 TARGET  := $(BUILD_DIR)/$(BIN_DIR)/$(PROJECT_NAME).exe
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
+$(TARGET): $(filter-out $(BUILD_DIR)/$(OBJ_DIR)/$(PROJECT_NAME).o, $(OBJECTS))
+	$(CC) $(CFLAGS) -c $(CUR_DIR)/src/$(PROJECT_NAME).c -o $(BUILD_DIR)/$(OBJ_DIR)/$(PROJECT_NAME).o
 	@mkdir -p $(BUILD_DIR)/$(BIN_DIR)
-	$(CC) $(OBJECTS) -o $@
+	$(CC) $(filter-out $(BUILD_DIR)/$(OBJ_DIR)/$(PROJECT_NAME).o, $(OBJECTS)) $(BUILD_DIR)/$(OBJ_DIR)/$(PROJECT_NAME).o -o $@
 
 $(BUILD_DIR)/$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)

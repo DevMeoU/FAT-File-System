@@ -1,4 +1,4 @@
-# test/Makefile
+# app/Makefile
 PROJECT_NAME = app
 
 CC        = gcc
