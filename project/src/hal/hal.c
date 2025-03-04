@@ -16,10 +16,6 @@
 /*********************************************************************
  * Function prototypes
  *********************************************************************/
-int hal_init(const char *img_path);
-int hal_read_sector(unsigned int sector, unsigned char *buffer);
-int hal_write_sector(unsigned int sector, const unsigned char *buffer);
-void hal_configure();
 
 /*********************************************************************
  * Implementations
@@ -40,7 +36,7 @@ int hal_write_sector(unsigned int sector, const unsigned char *buffer) {
     return result == 0 ? 0 : -1;  /* Return 0 on success, -1 on error */
 }
 
-void hal_configure() {
+void hal_configure(size_t sector_size, unsigned int max_sectors) {
     /* Configure parameters like sector size or maximum number of sectors
        Currently, sector size is defined as a constant SECTOR_SIZE */
 }
