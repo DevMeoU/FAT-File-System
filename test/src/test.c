@@ -2,12 +2,15 @@
 #include "ip_driver.h"
 
 int main(void) {
+    int measuring = 0;
     printf("Hello from test!\n");
     
     #ifdef TEST_DRIVER
-        int result = test_ip_driver();
-        
-        assert(result == -1);
+        /* Test IP Driver */
+        printf("Testing IP Driver...\n");
+        fflush(stdout);
+        measuring = measure_function(test_ip_driver);
+        printf("Time measured: %dms\n", measuring);
     #endif
 
     return 0;
@@ -64,4 +67,18 @@ int test_ip_driver(void)
     assert(result == -1);
 
     return result;
+}
+
+int measure_function(int (*args)(void)) {
+    clock_t start, end;
+    double cpu_time_used;
+
+    start = clock();
+    // Code to measure
+    int result = args();
+    assert(result == -1);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    return (int)(cpu_time_used * 1000); // Return time in milliseconds
 }
