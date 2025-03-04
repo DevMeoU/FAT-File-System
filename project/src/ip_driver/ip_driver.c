@@ -1,14 +1,26 @@
+/*********************************************************************
+ * ✨ Author: Ducson9112k 🌟
+ *********************************************************************/
+#define _FILE_OFFSET_BITS 64 /* Enable 64-bit file offsets */
+
+/*********************************************************************
+ * Include
+ *********************************************************************/
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include "ip_driver.h"
 
+/*********************************************************************
+ * Implementations
+ *********************************************************************/
 static FILE *file = NULL;
 
 int ip_driver_init(const char *img_path) {
     file = fopen(img_path, "r+b");
     if (!file) {
-        return -1; // Lỗi mở file
+        /** Lỗi mở file */
+        return -1;
     }
     return 0;
 }
@@ -30,3 +42,4 @@ void ip_driver_close() {
         fclose(file);
     }
 }
+
