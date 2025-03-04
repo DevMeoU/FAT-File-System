@@ -10,6 +10,8 @@ CFLAGS    = -Wall -Wextra \
             -I../project/src/middleware \
             -I../project/src/utilities/linkedlist
 
+CFLAGS    += -DTEST_DRIVER
+
 CUR_DIR   = .
 SRC_DIR   = ../project/src
 BUILD_DIR = build
