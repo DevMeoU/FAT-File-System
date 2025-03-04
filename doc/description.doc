@@ -1,0 +1,123 @@
+1. Tổng Quan Dự Án
+Mục tiêu: Xây dựng ứng dụng C với kiến trúc phân lớp:
+Driver: Giao tiếp trực tiếp với phần cứng.
+HAL (Hardware Abstraction Layer): Trừu tượng hóa phần cứng, cung cấp API đơn giản cho tầng trên.
+Middleware: Xử lý logic nghiệp vụ, trung gian xử lý dữ liệu từ HAL và chuyển lên Application.
+Application: Giao diện người dùng (CLI, GUI, hay dịch vụ) và điều phối luồng chương trình.
+Luồng dữ liệu tổng thể:
+Application → Middleware → HAL → Driver → Phần cứng
+Và ngược lại khi dữ liệu được trả về từ phần cứng.
+
+2. Chi Tiết Các Lớp
+2.1. Driver Layer
+Chức năng:
+
+Tương tác trực tiếp với phần cứng (I/O, giao tiếp bus, xử lý ngắt,...).
+Quản lý khởi tạo, đọc/ghi dữ liệu và xử lý ngắt từ thiết bị.
+Các hàm chính dự kiến:
+
+driver_init(): Khởi tạo cấu hình ban đầu và thiết lập trạng thái thiết bị.
+driver_read(): Đọc dữ liệu từ phần cứng.
+driver_write(): Ghi dữ liệu đến phần cứng.
+driver_interrupt_handler(): Xử lý các tín hiệu ngắt từ thiết bị.
+driver_close(): Giải phóng tài nguyên và tắt thiết bị khi không cần thiết.
+Luồng code:
+
+Khi hệ thống khởi động, driver_init() được gọi.
+Trong quá trình hoạt động, khi cần giao tiếp, driver_read() và driver_write() sẽ được gọi.
+Nếu có ngắt xảy ra, driver_interrupt_handler() sẽ xử lý và có thể kích hoạt callback chuyển dữ liệu lên tầng trên.
+2.2. Hardware Abstraction Layer (HAL)
+Chức năng:
+
+Trừu tượng hóa các thao tác phần cứng thông qua API đơn giản.
+Cách ly chi tiết kỹ thuật của phần cứng khỏi các tầng xử lý logic nghiệp vụ.
+Các hàm chính dự kiến:
+
+hal_init(): Khởi tạo các cấu hình cần thiết, gọi driver_init() nội bộ.
+hal_read_sensor(): Đọc dữ liệu từ các cảm biến (sử dụng driver_read()).
+hal_write_actuator(): Gửi lệnh đến các bộ điều khiển (sử dụng driver_write()).
+hal_configure(): Cấu hình các tham số hoạt động của phần cứng.
+Luồng code:
+
+Middleware gọi các hàm của HAL để lấy dữ liệu hay gửi lệnh, không cần quan tâm đến chi tiết phần cứng.
+2.3. Middleware Layer
+Chức năng:
+
+Xử lý logic nghiệp vụ và trung gian giữa phần cứng (qua HAL) và Application.
+Quản lý sự kiện, xử lý dữ liệu và cập nhật trạng thái hệ thống.
+Các hàm chính dự kiến:
+
+middleware_init(): Khởi tạo các module, đăng ký callback từ HAL.
+middleware_process_data(): Xử lý, phân tích và định dạng dữ liệu nhận được từ HAL.
+middleware_event_handler(): Xử lý các sự kiện (ví dụ: cảnh báo, thông báo trạng thái thay đổi).
+middleware_update_state(): Cập nhật trạng thái hệ thống dựa trên dữ liệu xử lý.
+Luồng code:
+
+Khi HAL có dữ liệu mới (do đọc thiết bị hoặc sự kiện ngắt), middleware sẽ nhận và xử lý.
+Sau khi xử lý, middleware chuyển kết quả hoặc thông báo trạng thái lên Application.
+Ngoài ra, middleware cũng có thể gửi lệnh ngược trở lại cho HAL để điều khiển phần cứng.
+2.4. Application Layer
+Chức năng:
+
+Quản lý giao diện người dùng và các tác vụ cấp cao.
+Điều phối luồng chương trình, nhận đầu vào từ người dùng và hiển thị kết quả từ middleware.
+Các hàm chính dự kiến:
+
+app_init(): Khởi tạo ứng dụng, cấu hình giao diện và module liên quan.
+app_run(): Vòng lặp chính của ứng dụng để xử lý sự kiện.
+app_display_menu(): Hiển thị giao diện hoặc menu lựa chọn cho người dùng.
+app_handle_input(): Xử lý đầu vào từ người dùng, chuyển sang middleware.
+app_exit(): Giải phóng tài nguyên và kết thúc ứng dụng.
+Luồng code:
+
+Ứng dụng khởi động bằng app_init(), gọi middleware_init() thông qua đó.
+Vòng lặp chính app_run() liên tục lắng nghe đầu vào từ người dùng và các thông báo từ middleware.
+Khi có yêu cầu, ứng dụng gọi các hàm của middleware để lấy dữ liệu xử lý hoặc gửi lệnh điều khiển.
+Khi thoát, app_exit() giải phóng tất cả tài nguyên đã cấp phát.
+3. Cấu Trúc Thư Mục và Quản Lý Mã Nguồn
+Cấu trúc thư mục gợi ý:
+
+/project
+  ├── src
+  │   ├── driver
+  │   │   ├── driver.c      // Thực hiện thao tác file (fopen, fread, fseek, fclose)
+  │   │   └── driver.h
+  │   ├── hal
+  │   │   ├── hal.c         // API trừu tượng hóa thao tác file thành các lệnh đọc/ghi "sector"
+  │   │   └── hal.h
+  │   ├── middleware
+  │   │   ├── middleware.c  // Xử lý logic nghiệp vụ, định dạng dữ liệu từ file floppy.img
+  │   │   └── middleware.h
+  │   └── application
+  │       ├── application.c // Chứa hàm main() và giao diện xử lý tương tác người dùng
+  │       └── application.h
+  └── Makefile
+
+Makefile:
+
+Xây dựng từng module riêng, sau đó liên kết lại thành file thực thi.
+Đảm bảo quy trình build rõ ràng, hỗ trợ debug và release.
+4. Luồng Chương Trình (Code Flow)
+Khởi động hệ thống:
+
+main() trong application.c gọi app_init().
+app_init() gọi middleware_init().
+middleware_init() gọi hal_init().
+hal_init() gọi driver_init() để thiết lập phần cứng.
+Vòng lặp hoạt động:
+
+Ứng dụng chạy trong vòng lặp app_run(), liên tục nhận đầu vào từ người dùng.
+Khi có dữ liệu hoặc sự kiện từ phần cứng:
+Driver: Xử lý ngắt qua driver_interrupt_handler().
+HAL: Đọc dữ liệu qua hal_read_sensor() hoặc gửi lệnh qua hal_write_actuator().
+Middleware: Xử lý dữ liệu qua middleware_process_data(), cập nhật trạng thái và thông báo cho Application.
+Application: Cập nhật giao diện hoặc phản hồi người dùng dựa trên kết quả từ middleware.
+Kết thúc hệ thống:
+
+Khi người dùng yêu cầu thoát, app_exit() được gọi, giải phóng tài nguyên theo thứ tự ngược lại (Application → Middleware → HAL → Driver).
+5. Lưu Ý Khi Triển Khai
+Tách biệt module: Mỗi lớp nên có các file header và source riêng để dễ quản lý và bảo trì.
+Xử lý lỗi: Mỗi hàm cần có cơ chế kiểm tra lỗi (error checking) và trả về các mã lỗi rõ ràng.
+Giao tiếp giữa các lớp: Sử dụng các callback hoặc sự kiện để đồng bộ hóa dữ liệu giữa các lớp, đặc biệt với các sự kiện bất đồng bộ từ phần cứng.
+Kiểm thử: Triển khai unit test cho từng module độc lập trước khi tích hợp toàn hệ thống.
+Tài liệu: Ghi chép rõ ràng mô tả các hàm, luồng dữ liệu và cấu trúc module để hỗ trợ cho việc bảo trì và phát triển sau này.

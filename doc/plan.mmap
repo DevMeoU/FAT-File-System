@@ -1,0 +1,131 @@
+PLAN
+	1. Tổng Quan Kiến Trúc
+		Mục tiêu:
+			Xây dựng ứng dụng C trên Windows nhằm đọc và xử lý file floppy.img. Thay vì giao tiếp với phần cứng thật, chương trình sử dụng các thao tác đọc/ghi file để mô phỏng các chức năng của phần cứng đĩa.
+		Luồng dữ liệu tổng thể:
+			Application → Middleware → HAL → Driver (File I/O)
+			Và ngược lại khi dữ liệu được lấy từ file floppy.img để hiển thị, xử lý trong ứng dụng.
+		Cấu trúc thư mục dự án:
+			project
+				src
+					driver
+						driver.h
+						driver.c
+						// Thực hiện thao tác file (fopen, fread, fseek, fclose)
+					hal
+						hal.h
+						hal.c
+						// API trừu tượng hóa thao tác file thành các lệnh đọc/ghi "sector"
+					middleware
+						middleware.h
+						middleware.c
+						// Xử lý logic nghiệp vụ, định dạng dữ liệu từ file floppy.img
+					application
+						application.h
+						application.c
+						// Chứa hàm main() và giao diện xử lý tương tác người dùng
+	2. Chi Tiết Các Lớp
+		2.1. Driver Layer
+			Chức năng chính:
+				Mô phỏng các thao tác tương tác với phần cứng bằng cách thao tác với file floppy.img.
+			Các hàm chính dự kiến:
+				driver_init(const char *img_path): Mở file floppy.img (theo chế độ đọc hoặc đọc/ghi nếu cần) và khởi tạo biến quản lý file.
+				driver_read_sector(unsigned int sector, unsigned char *buffer, size_t sector_size): Tính toán vị trí offset trong file dựa trên số sector và kích thước sector, sau đó đọc dữ liệu vào buffer.
+				driver_write_sector(unsigned int sector, const unsigned char *buffer, size_t sector_size): (Nếu có nhu cầu) Ghi dữ liệu từ buffer vào vị trí tương ứng trong file.
+				driver_close(): Đóng file và giải phóng tài nguyên liên quan.
+			Luồng code mẫu trong Driver:
+				Khi driver_init() được gọi, file được mở và kiểm tra trạng thái.
+				Khi cần đọc dữ liệu, driver_read_sector() sử dụng fseek() để di chuyển đến vị trí sector cần đọc, sau đó gọi fread() để lấy dữ liệu.
+				Khi kết thúc hoặc cần cập nhật dữ liệu, driver_write_sector() được sử dụng để ghi dữ liệu (nếu hỗ trợ).
+				Cuối cùng, driver_close() được gọi để đóng file.
+			2.2. Hardware Abstraction Layer (HAL)
+				Chức năng chính:
+					Cung cấp API cấp cao để xử lý thao tác với file, che giấu chi tiết việc tính toán vị trí trong file và các thao tác I/O.
+				Các hàm chính dự kiến:
+					hal_init(const char *img_path): Gọi driver_init() với đường dẫn đến floppy.img, khởi tạo trạng thái cần thiết.
+					hal_read_data(unsigned int sector, unsigned char *buffer): Gói gọn việc đọc một sector thông qua driver_read_sector(). Có thể bao gồm kiểm tra lỗi và chuyển đổi định dạng dữ liệu.
+					hal_write_data(unsigned int sector, const unsigned char *buffer): Nếu cần ghi, thực hiện gọi driver_write_sector() và xử lý kết quả.
+					hal_configure(): Thiết lập các tham số như kích thước sector, số sector tối đa, … cho quá trình xử lý.
+				Luồng code:
+					Middleware chỉ cần gọi các hàm của HAL mà không cần quan tâm đến chi tiết thao tác file, đảm bảo tính module hóa và dễ thay đổi nếu cần chuyển sang mô phỏng khác.
+			2.3. Middleware Layer
+				Chức năng chính:
+					Xử lý logic nghiệp vụ dựa trên dữ liệu đọc từ file. Có thể bao gồm việc phân tích định dạng file hệ thống, quản lý bộ nhớ đệm, chuyển đổi dữ liệu từ dạng binary sang định dạng có thể hiển thị.
+				Các hàm chính dự kiến:
+					middleware_init(): Khởi tạo các thành phần xử lý nghiệp vụ, thiết lập kết nối với HAL.
+					middleware_process_data(): Nhận dữ liệu từ HAL (từng sector hoặc block) và thực hiện các thao tác xử lý, ví dụ như phân tích cấu trúc file hệ thống, kiểm tra lỗi hoặc tạo các cấu trúc dữ liệu trung gian.
+					middleware_get_info(): Trả về thông tin đã xử lý (ví dụ danh sách file, metadata, …) cho tầng Application.
+					middleware_event_handler(): Nếu có sự kiện (ví dụ cảnh báo lỗi đọc file) được phát hiện, xử lý và thông báo cho Application.
+				Luồng code:
+					Middleware nhận dữ liệu từ HAL, xử lý và chuyển đổi thông tin thành dạng có ý nghĩa cho người dùng hoặc cho các bước xử lý tiếp theo.
+			2.4. Application Layer
+				Chức năng chính:
+					Giao diện người dùng và điều phối các thao tác dựa trên kết quả từ middleware. Ứng dụng có thể là giao diện dòng lệnh (CLI) hoặc giao diện đồ họa (GUI) tùy theo mục đích.
+				Các hàm chính dự kiến:
+					app_init(): Khởi tạo ứng dụng, gọi hal_init() (với đường dẫn đến file floppy.img) và middleware_init().
+					app_run(): Vòng lặp chính của ứng dụng; có thể hiển thị menu, nhận lệnh từ người dùng, và gọi middleware_get_info() để hiển thị dữ liệu.
+					app_handle_input(): Xử lý đầu vào của người dùng (ví dụ chọn sector để đọc, xem thông tin file, …).
+					app_exit(): Gọi hàm dọn dẹp, như driver_close() thông qua HAL, và kết thúc ứng dụng.
+				Luồng code mẫu (bao gồm hàm main):
+					#include "application.h"
+
+int main(void) {
+    app_init();    // Khởi tạo các module, mở file floppy.img
+    app_run();     // Vòng lặp chính để xử lý tương tác người dùng
+    app_exit();    // Giải phóng tài nguyên và đóng file
+    return 0;
+}
+	3. Luồng Chương Trình Toàn Cục
+		Khởi động:
+		Hàm main() trong application/application.c được gọi, từ đó gọi app_init().
+		app_init() gọi middleware_init(), sau đó middleware_init() gọi hal_init().
+		hal_init() sử dụng driver_init() với đường dẫn đến file floppy.img để mở file và chuẩn bị các thao tác I/O.
+		Vòng lặp hoạt động:
+			app_run() liên tục lắng nghe đầu vào từ người dùng (ví dụ, yêu cầu đọc sector cụ thể hoặc hiển thị thông tin file).
+			Khi có yêu cầu, Application gọi các hàm của Middleware, Middleware sử dụng HAL để đọc dữ liệu từ file thông qua Driver.
+			Dữ liệu đọc được xử lý trong Middleware (ví dụ phân tích cấu trúc dữ liệu, kiểm tra lỗi, chuyển đổi định dạng) và trả về cho Application để hiển thị hoặc xử lý thêm.
+		Kết thúc:
+			Khi người dùng ra lệnh thoát, app_exit() được gọi, dọn dẹp bộ nhớ, và HAL thông qua Driver đóng file floppy.img.
+	4. Makefile và Quản Lý Dự Án
+		Makefile:
+			Tập trung xây dựng các module riêng biệt trong thư mục src và sau đó liên kết chúng lại thành file thực thi.
+			Đảm bảo có các mục tiêu cho debug và release.
+			Ví dụ, Makefile có thể biên dịch từng thư mục theo thứ tự: driver → hal → middleware → application.
+		Gợi ý cấu trúc Makefile (rút gọn):
+			CC = gcc
+            CFLAGS = -Wall -Wextra -I./src/driver -I./src/hal -I./src/middleware -I./src/application
+
+            SRCDIR = src
+            OBJDIR = obj
+            BINDIR = bin
+
+            SOURCES := $(wildcard $(SRCDIR)/*/*.c)
+            OBJECTS := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
+            TARGET = $(BINDIR)/app.exe
+
+            all: $(TARGET)
+
+            $(TARGET): $(OBJECTS)
+                @mkdir -p $(BINDIR)
+                $(CC) $(OBJECTS) -o $(TARGET)
+
+            $(OBJDIR)/%.o: $(SRCDIR)/%.c
+                @mkdir -p $(dir $@)
+                $(CC) $(CFLAGS) -c $< -o $@
+
+            clean:
+                rm -rf $(OBJDIR) $(BINDIR)
+	5. Lưu Ý Khi Triển Khai
+		Mô phỏng phần cứng qua file:
+			Vì không có giao tiếp với phần cứng thật, nên mọi thao tác I/O được thực hiện qua file (sử dụng fopen, fread, fseek, fwrite, fclose).
+		Kiểm tra lỗi:
+			Mỗi hàm cần kiểm tra lỗi (ví dụ: không mở được file, lỗi đọc/ghi) và trả về mã lỗi phù hợp cho các tầng phía trên xử lý.
+		Tính module hóa:
+			Mỗi lớp chỉ nên phụ thuộc vào các API đã định nghĩa, giúp việc thay đổi cách mô phỏng (ví dụ, chuyển từ file sang cơ chế khác) được thực hiện một cách độc lập.
+		Phát triển và kiểm thử:
+			Thực hiện unit test cho từng module để đảm bảo rằng các thao tác đọc/ghi file được thực hiện chính xác, và dữ liệu được xử lý đúng bởi Middleware trước khi hiển thị lên Application.
+// Xử lý logic nghiệp vụ, định dạng dữ liệu từ file floppy.img
+// API trừu tượng hóa thao tác file thành các lệnh đọc/ghi "sector"
+// Thực hiện thao tác file (fopen, fread, fseek, fclose)
+// Chứa hàm main() và giao diện xử lý tương tác người dùng
+ 
