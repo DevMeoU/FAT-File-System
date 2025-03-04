@@ -1,3 +1,6 @@
+# test/Makefile
+PROJECT_NAME = app
+
 CC        = gcc
 CFLAGS    = -Wall -Wextra \
             -I./src/ip_driver \
@@ -17,7 +20,7 @@ SOURCES := $(wildcard $(SRC_DIR)/*/*.c) \
 
 OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/$(OBJ_DIR)/%.o, $(SOURCES))
 
-TARGET  := $(BUILD_DIR)/$(BIN_DIR)/app.exe
+TARGET  := $(BUILD_DIR)/$(BIN_DIR)/$(PROJECT_NAME).exe
 
 all: $(TARGET)
 

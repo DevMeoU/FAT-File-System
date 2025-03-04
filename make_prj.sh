@@ -2,8 +2,8 @@
 # Danh sách các thư mục cần thiết theo cấu trúc mong muốn
 required_dirs=(
     "project"
-    "test"  # Thư mục test ngang hàng với project
-    "test/Makefile"
+    "test"
+    "test/src"
     "project/src"
     "project/src/ip_driver"
     "project/src/hal"
@@ -62,6 +62,7 @@ touch project/src/middleware/middleware.c project/src/middleware/middleware.h
 touch project/src/application/application.c project/src/application/application.h
 touch project/src/utilities/linkedlist/linkedlist.c project/src/utilities/linkedlist/linkedlist.h
 touch project/Makefile
-touch test/test.c test/test.h  # Tạo thêm file .c và .h trong test
+touch test/src/test.c test/src/test.h  # Tạo thêm file .c và .h trong test
 touch test/Makefile.mak
+
 echo "Cấu trúc dự án đã được cập nhật theo yêu cầu."
