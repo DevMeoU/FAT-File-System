@@ -1,14 +1,31 @@
 /*********************************************************************
  * ✨ Author: Ducson9112k 🌟
  *********************************************************************/
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "application.h"
 #include "middleware.h"
+#include "application.h"
 
 #define MAX_CMD_LEN 256
-char current_path[256] = "~/";  // Thư mục hiện tại, bắt đầu từ gốc
+char current_path[256] = "~";  // Thư mục hiện tại, bắt đầu từ gốc
+
+/**
+ * @brief Initializes the application.
+ * 
+ * This function initializes the entire system by calling the respective
+ * initialization functions for each layer. It ensures that the system is
+ * in a valid state before the main loop starts.
+ * 
+ * @return 0 if initialization is successful, -1 otherwise.
+ */
+int app_init() {
+    /* File floppy image path */
+    const char *img_path = "E:\\Workspace\\project\\clone\\FATFileSystem\\images\\floppy.img";
+
+    if (middleware_init(img_path) != 0) {
+        fprintf(stderr, "middleware_init() failed!\n");
+        return -1;
+    }
+    return 0;
+}
 
 /**
  * @brief Executes the main command loop for the application.
@@ -19,12 +36,12 @@ char current_path[256] = "~/";  // Thư mục hiện tại, bắt đầu từ g�
  */
 void app_run() {
     char command[MAX_CMD_LEN];
-    printf("FATShell> ");
+    app_print_title(current_path);
     while (fgets(command, MAX_CMD_LEN, stdin)) {
         command[strcspn(command, "\n")] = 0;  // Xóa ký tự xuống dòng
         if (strcmp(command, "exit") == 0) break;
         app_handle_command(command);
-        printf("FATShell> ");
+        app_print_title(current_path);
     }
 }
 
@@ -35,8 +52,7 @@ void app_handle_command(char *command) {
     if (strcmp(token, "ls") == 0) {
         char *path = strtok(NULL, " ");
         if (path == NULL) path = current_path;  // Mặc định dùng thư mục hiện tại
-        printf("Listing directory %s:\n", path);
-        // middleware_list_directory(path);
+        middleware_list_directory(path);
     } else if (strcmp(token, "cd") == 0) {
         char *path = strtok(NULL, " ");
         if (path != NULL) {
@@ -48,14 +64,12 @@ void app_handle_command(char *command) {
     } else if (strcmp(token, "cat") == 0) {
         char *filename = strtok(NULL, " ");
         if (filename != NULL) {
-            printf("Content of file %s:\n", filename);
-            // middleware_read_file(filename);
+            middleware_read_file(filename);
         } else {
             printf("Please specify a file name!\n");
         }
     } else if (strcmp(token, "cls") == 0) {
-        printf("Clearing screen...\n");
-        // middleware_clear_screen();
+        app_clear_screen();
     } else if (strcmp(token, "mkdir") == 0) {
         char *dirname = strtok(NULL, " ");
         if (dirname != NULL) {
@@ -75,6 +89,8 @@ void app_handle_command(char *command) {
     } else if (strcmp(token, "exit()") == 0) {
         printf("Goodbye!\n");
         exit(0);
+    } else if (strcmp(token, "help") == 0) {
+        app_print_help();
     } else {
         printf("Invalid command: %s\n", token);
     }
@@ -82,8 +98,33 @@ void app_handle_command(char *command) {
 
 int main(void) {
     printf("Hello from application!\n");
-    // app_init();  // Khởi tạo hệ thống
+    fflush(stdout);
+    app_init();  // Khởi tạo hệ thống
     app_run();   // Chạy shell
     // app_exit();  // Dọn dẹp và thoát
     return 0;
+}
+
+void app_print_title(char *current_path) {
+    print_colored("FATShell ", ANSI_COLOR_GREEN, ANSI_BG_BLACK);
+    print_colored(current_path, ANSI_COLOR_YELLOW, ANSI_BG_BLACK);
+    print_colored(" > ", ANSI_COLOR_MAGENTA, ANSI_BG_BLACK);
+    fflush(stdout);
+}
+
+void app_print_help() {
+    printf("Available commands:\n");
+    printf("ls [directory]\n");
+    printf("cd [directory]\n");
+    printf("cat [file]\n");
+    printf("cls\n");
+    printf("exit\n");
+}
+
+void app_exit() {
+    // middleware_exit();
+}
+
+void app_clear_screen() {
+    system("cls");
 }

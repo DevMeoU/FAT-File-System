@@ -11,14 +11,24 @@ extern "C" {
 /*********************************************************************
  * Include
  *********************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include "print_color.h"
 
 /*********************************************************************
  * Define
  *********************************************************************/
 
 /*********************************************************************
+ * Static function
+ *********************************************************************/
+
+/*********************************************************************
  * Function prototypes
  *********************************************************************/
+
 /**
  * @brief Initialize the application.
  * 
@@ -49,6 +59,26 @@ void app_exit(void);
  * @param command The command to handle.
  */
 void app_handle_command(char *command);
+
+/**
+ * @brief Print the application title.
+ * 
+ * @param current_path The current directory path.
+ */
+void app_print_title(char *current_path);
+
+/**
+ * @brief Print the help message.
+ */
+void app_print_help(void);
+
+/**
+ * @brief Clears the terminal screen.
+ * 
+ * This function sends the appropriate command to the terminal to clear
+ * the screen, providing a clean interface for the user.
+ */
+void app_clear_screen();
 
 #ifdef __cplusplus
 }

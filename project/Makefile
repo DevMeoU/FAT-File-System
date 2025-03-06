@@ -1,5 +1,5 @@
 # app/Makefile
-PROJECT_NAME = app
+PROJECT_NAME = application
 
 CC        = gcc
 CFLAGS    = -Wall -Wextra \
@@ -8,7 +8,8 @@ CFLAGS    = -Wall -Wextra \
             -I./src/fat_driver \
             -I./src/middleware \
             -I./src/application \
-            -I./src/utilities/linkedlist
+            -I./src/utilities/linkedlist \
+            -I./src/utilities/log
 
 SRC_DIR   = src
 OBJ_DIR   = obj
