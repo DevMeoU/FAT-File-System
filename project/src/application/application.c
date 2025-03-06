@@ -5,7 +5,7 @@
 #include "application.h"
 
 #define MAX_CMD_LEN 256
-char current_path[256] = "~";  // Thư mục hiện tại, bắt đầu từ gốc
+char current_path[256] = "/";  // Thư mục hiện tại, bắt đầu từ gốc
 
 /**
  * @brief Initializes the application.
@@ -56,8 +56,7 @@ void app_handle_command(char *command) {
     } else if (strcmp(token, "cd") == 0) {
         char *path = strtok(NULL, " ");
         if (path != NULL) {
-            printf("Changing directory to %s\n", path);
-            // middleware_change_directory(path, current_path);
+            middleware_change_directory(path, current_path);
         } else {
             printf("Please specify a path!\n");
         }
@@ -101,14 +100,14 @@ int main(void) {
     fflush(stdout);
     app_init();  // Khởi tạo hệ thống
     app_run();   // Chạy shell
-    // app_exit();  // Dọn dẹp và thoát
     return 0;
 }
 
 void app_print_title(char *current_path) {
     print_colored("FATShell ", ANSI_COLOR_GREEN, ANSI_BG_BLACK);
+    print_colored("> ", ANSI_COLOR_MAGENTA, ANSI_BG_BLACK);
     print_colored(current_path, ANSI_COLOR_YELLOW, ANSI_BG_BLACK);
-    print_colored(" > ", ANSI_COLOR_MAGENTA, ANSI_BG_BLACK);
+    printf(" ");
     fflush(stdout);
 }
 
@@ -119,10 +118,6 @@ void app_print_help() {
     printf("cat [file]\n");
     printf("cls\n");
     printf("exit\n");
-}
-
-void app_exit() {
-    // middleware_exit();
 }
 
 void app_clear_screen() {

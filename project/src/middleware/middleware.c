@@ -1,69 +1,74 @@
-/*********************************************************************
- * Include
- *********************************************************************/
+/*
+* Middleware Module
+* Author: Ducson9112k
+*
+* Description:
+*   Cung cấp các hàm trung gian để khởi tạo hệ thống, liệt kê thư mục, thay đổi thư mục và đọc file
+*   dựa trên FAT Driver.
+*/
+
 #include "middleware.h"
 #include "fat_driver.h"
+#include "linkedlist.h"
+#include <stdio.h>
+#include <string.h>
 
-/*********************************************************************
- * Define
- *********************************************************************/
+/* Global variable: danh sách đường dẫn (cây thư mục) */
+static linkedlist_t *path_list = NULL;
 
-/*********************************************************************
- * Function prototypes
- *********************************************************************/
-
-/*********************************************************************
- * Implementations
- *********************************************************************/
-/**
- * @brief Initialize middleware and FAT driver
- * @param img_path Path to the floppy image file
- * @return 0 on success, -1 on failure
- */
+/*
+* middleware_init:
+*   Khởi tạo middleware và FAT driver.
+*   Cấp phát danh sách liên kết cho cây thư mục và khởi tạo FAT driver.
+*/
 int middleware_init(const char *img_path) {
-    if (fat_driver_init(img_path) != 0) {
+    path_list = llist_init();
+    if (path_list == NULL) {
+        printf("Failed to initialize linked list.\n");
+        return -1;
+    }
+    if (fat_driver_init(img_path, path_list) != 0) {
         printf("Failed to initialize FAT driver.\n");
         return -1;
     }
     return 0;
 }
 
-/**
- * @brief List directory contents
- * @param path Path of the directory to list
- */
+/*
+* middleware_list_directory:
+*   Liệt kê nội dung thư mục tại đường dẫn được chỉ định.
+*   Hàm gọi FAT Driver để hiển thị danh sách.
+*/
 void middleware_list_directory(const char *path) {
-    // printf("Listing files/directories at %s:\n", path);
-    // Gọi FAT Driver để liệt kê thư mục tại path
-    if (fat_driver_list_directory(path) != 0) {
+    if (fat_driver_list_directory(path, path_list) != 0) {
         printf("Failed to list directory.\n");
     }
-    // Giả sử fat_driver_list_directory đã xử lý việc hiển thị danh sách
 }
 
-/**
- * @brief Change current directory
- * @param path New directory path
- * @param current_path Current path to update
- */
+/*
+* middleware_change_directory:
+*   Thay đổi thư mục hiện tại.
+*   Nếu thư mục tồn tại, cập nhật current_path; nếu không, thông báo lỗi.
+*/
 void middleware_change_directory(const char *path, char *current_path) {
-    // Kiểm tra xem thư mục có tồn tại không
     if (fat_driver_directory_exists(path)) {
+        /* Ví dụ: nối đường dẫn hợp lệ, cập nhật current_path */
         strcpy(current_path, path);
-        printf("Đã chuyển đến thư mục: %s\n", path);
+        if (current_path[strlen(current_path) - 1] != '/')
+            strcat(current_path, "/");
+        printf("Changed to directory: %s\n", current_path);
     } else {
-        printf("Thư mục không tồn tại: %s\n", path);
+        printf("Directory does not exist: %s\n", path);
     }
 }
 
-/**
- * @brief Read and display file content
- * @param filename Path of the file to read
- */
+/*
+* middleware_read_file:
+*   Đọc nội dung file theo đường dẫn được chỉ định.
+*   Gọi FAT Driver để thực hiện việc đọc và hiển thị nội dung file.
+*/
 void middleware_read_file(const char *filename) {
-    // Gọi FAT Driver để đọc file
-    if (fat_driver_read_file(filename) != 0) {
+    if (fat_driver_read_file(filename, path_list) != 0) {
         printf("Failed to read file.\n");
     }
-    // Giả sử fat_driver_read_file đã xử lý việc hiển thị nội dung
 }
