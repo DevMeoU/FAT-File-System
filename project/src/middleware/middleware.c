@@ -21,13 +21,13 @@ static linkedlist_t *path_list = NULL;
 *   Khởi tạo middleware và FAT driver.
 *   Cấp phát danh sách liên kết cho cây thư mục và khởi tạo FAT driver.
 */
-int middleware_init(const char *img_path) {
+int middleware_init(const char *img_path, const char *current_path) {
     path_list = llist_init();
     if (path_list == NULL) {
         printf("Failed to initialize linked list.\n");
         return -1;
     }
-    if (fat_driver_init(img_path, path_list) != 0) {
+    if (fat_driver_init(img_path, path_list, current_path) != 0) {
         printf("Failed to initialize FAT driver.\n");
         return -1;
     }

@@ -33,7 +33,7 @@ static bool is_boot_startup = false;
 * Mỗi nút lưu trữ tên, thông tin file (nếu là file), con trỏ đến nút cha và danh sách các nút con.
 */
 typedef struct FATFS_Node {
-    char name[256];              /* Tên file hoặc thư mục */
+    char *path;                  /* Đường dẫn tới nút hiện tại */
     int isDirectory;             /* 1 nếu là thư mục, 0 nếu là file */
     FAT_DRIVER_FileInfo fileInfo;/* Thông tin file (nếu có) */
     struct FATFS_Node *parent;   /* Con trỏ đến nút cha (NULL nếu là root) */
@@ -98,7 +98,7 @@ static int starts_with_token(const char *entry, const char *token) {
     if (strncmp(entry, token, token_len) != 0)
         return 0;
     char next_char = entry[token_len];
-    return ((next_char == '\0') || isspace(next_char) || ispunct(next_char)) ? 1 : 0;
+    return ((next_char == '\0') || isspace(next_char) || ispunct(next_char) || !isalnum(next_char)) ? 1 : 0;
 }
 
 /*
@@ -234,7 +234,7 @@ static FATFS_Node *find_node_by_path(linkedlist_t *root_list, const char *path) 
  * @param file_list Con trỏ đến danh sách liên kết để lưu trữ cây thư mục.
  * @return 0 nếu thành công, -1 nếu có lỗi.
  */
-int fat_driver_init(const char *img_path, linkedlist_t *file_list) {
+int fat_driver_init(const char *img_path, linkedlist_t *file_list, const char *root_path) {
     if (hal_init(img_path) != 0) {
         printf("Error: Cannot initialize HAL.\n");
         return -1;
@@ -247,7 +247,8 @@ int fat_driver_init(const char *img_path, linkedlist_t *file_list) {
     /* Tạo nút root và thêm vào file_list */
     FATFS_Node root;
     memset(&root, 0, sizeof(FATFS_Node));
-    strcpy(root.name, "root");
+    strcpy(root.path, root_path);
+    strcpy(root.fileInfo.name, "root");
     root.isDirectory = 1;
     root.parent = NULL;
     root.children = llist_init();
@@ -255,7 +256,7 @@ int fat_driver_init(const char *img_path, linkedlist_t *file_list) {
     
     /* Xây dựng cây thư mục từ đĩa với đường dẫn "/" */
     is_boot_startup = true;
-    fat_driver_list_directory("/", file_list);
+    fat_driver_list_directory(file_list);
     is_boot_startup = false;
     return 0;
 }
@@ -313,8 +314,8 @@ int fat_driver_read_boot_sector(void) {
  * @param file_list Danh sách liên kết chứa cây thư mục.
  * @return 0 nếu thành công, -1 nếu có lỗi.
  */
-int fat_driver_list_directory(const char *path, linkedlist_t *file_list) {
-    if (path == NULL || strlen(path) == 0 || strcmp(path, "/") == 0) {
+int fat_driver_list_directory(linkedlist_t *file_list) {
+    if (file_list->tail == NULL || strlen(file_list->tail->data->path) == 0 || strcmp(file_list->tail->data->path, "/") == 0) {
         uint32_t root_dir_sectors = ((boot_data.RootEntCnt * DIR_NUMBER_OF_BYTES_PER_ENTRY) + (boot_data.BytePerSec - 1)) / boot_data.BytePerSec;
         uint32_t start_sector = boot_data.RootDirSector;
         unsigned char sector_buffer[FAT_DRIVER_BYTES_PER_SECTOR];
@@ -414,7 +415,7 @@ int fat_driver_read_file(const char *full_path, linkedlist_t *file_list) {
     llist_iterator_init(parent->children, &it);
     while (llist_iterator_has_next(&it)) {
         FATFS_Node *node = (FATFS_Node *)llist_iterator_next(&it);
-        if (!node->isDirectory && starts_with_token(node->name, filename) == 0) {
+        if (!node->isDirectory && starts_with_token(node->name, filename) != 0) {
             uint32_t start_cluster = node->fileInfo.firstCluster;
             return read_cluster_chain(start_cluster);
         }

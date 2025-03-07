@@ -233,7 +233,7 @@ typedef struct fat_driver_data {
  * @param file_list Pointer to the linked list to store directory tree.
  * @return 0 on success, -1 on failure.
  */
-int fat_driver_init(const char *img_path, linkedlist_t *file_list);
+int fat_driver_init(const char *img_path, linkedlist_t *file_list, const char *root_path);
 
 /**
  * @brief Read boot sector.
@@ -249,7 +249,7 @@ int fat_driver_read_boot_sector(void);
  * @param file_list Linked list to store directory entries.
  * @return 0 on success, -1 on failure.
  */
-int fat_driver_list_directory(const char *path, linkedlist_t *file_list);
+int fat_driver_list_directory(linkedlist_t *file_list);
 
 /**
  * @brief Read file.

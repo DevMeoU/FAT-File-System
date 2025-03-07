@@ -20,7 +20,7 @@ int app_init() {
     /* File floppy image path */
     const char *img_path = "E:\\Workspace\\project\\clone\\FATFileSystem\\images\\floppy.img";
 
-    if (middleware_init(img_path) != 0) {
+    if (middleware_init(img_path, current_path) != 0) {
         fprintf(stderr, "middleware_init() failed!\n");
         return -1;
     }

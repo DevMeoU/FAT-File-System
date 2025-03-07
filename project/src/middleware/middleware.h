@@ -22,7 +22,7 @@ extern "C" {
  * @param img_path Path to the floppy image file.
  * @return 0 on success, -1 on failure.
  */
-int middleware_init(const char *img_path);
+int middleware_init(const char *img_path, const char *current_path);
 
 /**
  * @brief List directory contents.
