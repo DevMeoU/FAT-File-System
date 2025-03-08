@@ -95,22 +95,26 @@ int32_t fat_open(const char *path, uint8_t mode, fat_file_t *file)
     memset(file, 0, sizeof(fat_file_t));
     file->mode = mode;
 
-    /* Parse path and find file */
+    /* Tìm và tính entry cho file */
     fat_dir_entry_t entry;
     memset(&entry, 0, sizeof(fat_dir_entry_t));
+    
+    /* Tìm file trong thư mục */
     int32_t status = fat_find_file(path, &entry);
+    
+    /* Xử lý trường hợp file không tồn tại */
     if (status == STATUS_NOT_FOUND) {
         if (mode & FAT_MODE_CREATE) {
-            /* Create new file */
+            /* Tạo file mới nếu có quyền tạo */
             status = fat_create_file(path, &entry);
             if (status != STATUS_SUCCESS) {
-                return status;
+                return status; /* Lỗi khi tạo file */
             }
         } else {
-            return STATUS_NOT_FOUND;
+            return STATUS_NOT_FOUND; /* Không tìm thấy file */
         }
     } else if (status != STATUS_SUCCESS) {
-        return status;
+        return status; /* Lỗi khác */
     }
 
     /* Check access mode */
@@ -952,6 +956,67 @@ int32_t fat_find_file(const char *path, fat_dir_entry_t *entry)
     }
 
     // ... rest of the function implementation ...
+    /* Tách đường dẫn thành các thành phần */
+    char *token = strtok(path_copy, "/");
+    if (!token) {
+        free(path_copy);
+        return STATUS_INVALID;
+    }
+
+    /* Bắt đầu từ thư mục gốc */
+    uint32_t current_cluster = fat_ctx.config.root_cluster;
+    fat_dir_entry_t current_entry;
+    bool found = false;
+
+    while (token) {
+        found = false;
+        
+        /* Đọc các entry trong thư mục hiện tại */
+        uint32_t sector = fat_cluster_to_sector(current_cluster);
+        uint32_t offset = 0;
+        
+        while (offset < fat_ctx.config.bytes_per_sector) {
+            /* Đọc entry */
+            if (storage_read_sector(sector, (uint8_t *)&current_entry) != STATUS_SUCCESS) {
+                free(path_copy);
+                return STATUS_READ_FAILED;
+            }
+
+            /* Kiểm tra entry rỗng */
+            if (current_entry.name[0] == 0x00) {
+                break;
+            }
+
+            /* Bỏ qua entry đã xóa */
+            if (current_entry.name[0] == 0xE5) {
+                offset += sizeof(fat_dir_entry_t);
+                continue;
+            }
+
+            /* So sánh tên */
+            char name[13];
+            fat_get_name(&current_entry, name);
+            if (strcmp(token, name) == 0) {
+                found = true;
+                current_cluster = (current_entry.first_cluster_hi << 16) | 
+                                 current_entry.first_cluster_lo;
+                break;
+            }
+
+            offset += sizeof(fat_dir_entry_t);
+        }
+
+        if (!found) {
+            free(path_copy);
+            return STATUS_NOT_FOUND;
+        }
+
+        token = strtok(NULL, "/");
+    }
+
+    /* Copy entry cuối cùng */
+    memcpy(entry, &current_entry, sizeof(fat_dir_entry_t));
+    free(path_copy);
     return STATUS_SUCCESS;
 }
 

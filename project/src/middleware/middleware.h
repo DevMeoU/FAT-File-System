@@ -73,11 +73,19 @@ typedef void (*mid_callback_t)(mid_resp_t *resp);
  *********************************************************************/
 
 /**
- * @brief Khởi tạo middleware
+ * @brief Khởi tạo middleware với file storage mặc định
  * 
  * @return MID_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
 int32_t mid_init(void);
+
+/**
+ * @brief Khởi tạo middleware với file storage được chỉ định
+ * 
+ * @param file_path Đường dẫn đến file storage
+ * @return MID_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t mid_init_with_file(const char *file_path);
 
 /**
  * @brief Xử lý lệnh đồng bộ

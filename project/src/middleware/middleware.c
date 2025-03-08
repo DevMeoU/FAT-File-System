@@ -15,16 +15,41 @@
 #include "fat_driver.h"
 #include "print_color.h"
 
+/* Default storage file path */
+#define DEFAULT_STORAGE_FILE "floppy.img"
+
 /*********************************************************************
  * Public Function Implementations
  *********************************************************************/
 
 int32_t mid_init(void)
 {
+    /* Use default storage file */
+    return mid_init_with_file(DEFAULT_STORAGE_FILE);
+}
+
+int32_t mid_init_with_file(const char *file_path)
+{
+    if (!file_path) {
+        return MID_INVALID;
+    }
+
+    /* Khởi tạo IP driver */
+    ip_config_t ip_config = {
+        .file_path = file_path,
+        .base_addr = 0,
+        .irq_num = 0,
+        .use_dma = false
+    };
+    if (ip_driver_init(&ip_config) != IP_SUCCESS) {
+        log_error("Failed to initialize IP driver");
+        return MID_ERROR;
+    }
+
     /* Khởi tạo FAT driver */
-    fat_config_t config = {0};
+    fat_config_t fat_config = {0};
     // TODO: Load configuration
-    if (fat_init(&config) != STATUS_SUCCESS) {
+    if (fat_init(&fat_config) != STATUS_SUCCESS) {
         log_error("Failed to initialize FAT driver");
         return MID_ERROR;
     }

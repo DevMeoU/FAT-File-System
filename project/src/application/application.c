@@ -35,7 +35,9 @@ static int32_t app_cmd_write_handler(int argc, char *argv[]);
 static int32_t app_cmd_rm_handler(int argc, char *argv[]);
 static int32_t app_cmd_cp_handler(int argc, char *argv[]);
 static int32_t app_cmd_mv_handler(int argc, char *argv[]);
+static int32_t app_cmd_mount_handler(int argc, char *argv[]);
 static int32_t app_cmd_exit_handler(int argc, char *argv[]);
+static int32_t app_cmd_clear_handler(int argc, char *argv[]);
 
 /*********************************************************************
  * Private Variables
@@ -67,7 +69,9 @@ static const struct {
     {"rm",    "Xóa file", "rm <file>", app_cmd_rm_handler},
     {"cp",    "Sao chép file", "cp <source> <destination>", app_cmd_cp_handler},
     {"mv",    "Di chuyển/đổi tên file", "mv <source> <destination>", app_cmd_mv_handler},
+    {"mount", "Mount file system", "mount <file>", app_cmd_mount_handler},
     {"exit",  "Thoát chương trình", "exit", app_cmd_exit_handler},
+    {"cls", "Xóa màn hình", "clear", app_cmd_clear_handler},
     {NULL, NULL, NULL, NULL}
 };
 
@@ -80,28 +84,26 @@ static bool app_is_running = false;
 
 int32_t app_init(void)
 {
-    /* Khởi tạo middleware */
-    if (mid_init() != MID_SUCCESS) {
-        log_error("Failed to initialize middleware");
-        return APP_ERROR;
-    }
-
     /* Khởi tạo biến */
     memset(app_cmd_buffer, 0, sizeof(app_cmd_buffer));
     memset(app_data_buffer, 0, sizeof(app_data_buffer));
     app_is_running = true;
+
+    /* Hiển thị thông báo chào mừng */
+    printf("\nWelcome to FAT File System Shell!\n");
+    printf("Please use 'mount <file>' to mount a file system\n");
+    printf("Type 'help' for list of commands\n\n");
 
     return APP_SUCCESS;
 }
 
 int32_t app_run(void)
 {
-    printf("\nWelcome to FAT File System Shell!\n");
-    printf("Type 'help' for list of commands\n\n");
-
     while (app_is_running) {
         /* Hiển thị prompt */
-        printf("%s> ", app_current_dir);
+        print_text("FATFS ", COLOR_GREEN, COLOR_BLACK);
+        print_text("%s ", COLOR_YELLOW, COLOR_BLACK, app_current_dir);
+        print_text("> ", COLOR_MAGENTA, COLOR_BLACK);
         fflush(stdout);
 
         /* Đọc lệnh */
@@ -329,6 +331,7 @@ static int32_t app_cmd_list_handler(int argc, char *argv[])
     /* Liệt kê thư mục */
     // TODO: Implement directory listing
     (void)path; // Unused parameter
+    app_list_directory(path);
 
     return APP_SUCCESS;
 }
@@ -445,6 +448,23 @@ static int32_t app_cmd_mv_handler(int argc, char *argv[])
     return APP_SUCCESS;
 }
 
+static int32_t app_cmd_mount_handler(int argc, char *argv[])
+{
+    if (argc != 2) {
+        printf("Usage: mount <file>\n");
+        return APP_INVALID;
+    }
+
+    /* Khởi tạo middleware với file đã chỉ định */
+    if (mid_init_with_file(argv[1]) != MID_SUCCESS) {
+        log_error("Failed to mount file system");
+        return APP_ERROR;
+    }
+
+    log_info("File system mounted successfully");
+    return APP_SUCCESS;
+}
+
 static int32_t app_cmd_exit_handler(int argc, char *argv[])
 {
     (void)argc; // Unused parameter
@@ -452,6 +472,15 @@ static int32_t app_cmd_exit_handler(int argc, char *argv[])
 
     printf("Goodbye!\n");
     exit(0);
+}
+
+static int32_t app_cmd_clear_handler(int argc, char *argv[])
+{
+    (void)argc; // Unused parameter
+    (void)argv; // Unused parameter
+
+    system("clear");
+    return APP_SUCCESS;
 }
 
 /*********************************************************************

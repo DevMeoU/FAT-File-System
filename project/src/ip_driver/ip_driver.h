@@ -33,6 +33,7 @@ extern "C" {
 
 /* IP driver configuration */
 typedef struct {
+    const char *file_path;  /* Path to storage file */
     uint32_t base_addr;     /* Base address */
     uint32_t irq_num;       /* IRQ number */
     bool use_dma;          /* Use DMA */
@@ -45,7 +46,7 @@ typedef struct {
 /**
  * @brief Initialize IP driver
  * 
- * @param config Configuration parameters
+ * @param config Configuration parameters including storage file path
  * @return IP_SUCCESS if successful, error code otherwise
  */
 int32_t ip_driver_init(const ip_config_t *config);

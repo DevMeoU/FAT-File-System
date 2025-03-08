@@ -9,6 +9,22 @@
 #include <stdarg.h>
 #include "print_color.h"
 
+void print_text(const char *format, color_t fg_color, color_t bg_color, ...)
+{
+    va_list args;
+    
+    /* Set text color */
+    printf("\033[%d;%dm", fg_color, bg_color + 10);
+    
+    /* Print formatted text */
+    va_start(args, bg_color);
+    vprintf(format, args);
+    va_end(args);
+    
+    /* Reset color */
+    printf("\033[0m");
+}
+
 void log_info(const char *format, ...)
 {
     va_list args;
