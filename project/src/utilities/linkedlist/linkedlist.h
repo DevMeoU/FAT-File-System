@@ -16,7 +16,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "common_type.h"
+#include "../../common/common_types.h"
 
 /*------------------------------*
 *    Linked List Data Types

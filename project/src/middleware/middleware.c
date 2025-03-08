@@ -22,9 +22,9 @@
 int32_t mid_init(void)
 {
     /* Khởi tạo FAT driver */
-    fat_boot_sector_t boot_sector = {0};
-    // TODO: Load boot sector
-    if (fat_init(&boot_sector) != FAT_SUCCESS) {
+    fat_config_t config = {0};
+    // TODO: Load configuration
+    if (fat_init(&config) != STATUS_SUCCESS) {
         log_error("Failed to initialize FAT driver");
         return MID_ERROR;
     }
@@ -76,7 +76,7 @@ int32_t mid_read_file(const char *path, void *buffer, uint32_t size, uint32_t *b
 
     /* Mở file */
     fat_file_t file;
-    if (fat_open(path, FAT_MODE_READ, &file) != FAT_SUCCESS) {
+    if (fat_open(path, FAT_MODE_READ, &file) != STATUS_SUCCESS) {
         return MID_NOT_FOUND;
     }
 
@@ -84,7 +84,7 @@ int32_t mid_read_file(const char *path, void *buffer, uint32_t size, uint32_t *b
     int32_t status = fat_read(&file, buffer, size, bytes_read);
     fat_close(&file);
 
-    return (status == FAT_SUCCESS) ? MID_SUCCESS : MID_ERROR;
+    return (status == STATUS_SUCCESS) ? MID_SUCCESS : MID_ERROR;
 }
 
 int32_t mid_write_file(const char *path, const void *buffer, uint32_t size, uint32_t *bytes_written)
@@ -95,7 +95,7 @@ int32_t mid_write_file(const char *path, const void *buffer, uint32_t size, uint
 
     /* Mở file */
     fat_file_t file;
-    if (fat_open(path, FAT_MODE_WRITE | FAT_MODE_CREATE, &file) != FAT_SUCCESS) {
+    if (fat_open(path, FAT_MODE_WRITE | FAT_MODE_CREATE, &file) != STATUS_SUCCESS) {
         return MID_ERROR;
     }
 
@@ -103,41 +103,29 @@ int32_t mid_write_file(const char *path, const void *buffer, uint32_t size, uint
     int32_t status = fat_write(&file, buffer, size, bytes_written);
     fat_close(&file);
 
-    return (status == FAT_SUCCESS) ? MID_SUCCESS : MID_ERROR;
+    return (status == STATUS_SUCCESS) ? MID_SUCCESS : MID_ERROR;
 }
 
-int32_t mid_send_data(const void *data, uint32_t size, uint32_t timeout __attribute__((unused)))
+int32_t mid_send_data(const void *data, uint32_t size, uint32_t timeout)
 {
-    if (data == NULL) {
+    if (data == NULL || size == 0) {
         return MID_INVALID;
     }
 
-    /* Tạo gói tin */
-    ip_packet_t packet;
-    packet.data = (uint8_t *)data;
-    packet.length = size;
-
-    /* Gửi dữ liệu */
-    return (ip_driver_send(&packet) == 0) ? MID_SUCCESS : MID_ERROR;
+    (void)timeout; // Unused parameter
+    // TODO: Implement data sending
+    return MID_ERROR;
 }
 
 int32_t mid_receive_data(void *buffer, uint32_t size, uint32_t *bytes_received, uint32_t timeout)
 {
-    if (buffer == NULL || bytes_received == NULL) {
+    if (buffer == NULL || size == 0 || bytes_received == NULL) {
         return MID_INVALID;
     }
 
-    /* Nhận gói tin */
-    ip_packet_t packet;
-    if (ip_driver_receive(&packet, timeout) != 0) {
-        return MID_TIMEOUT;
-    }
-
-    /* Copy dữ liệu */
-    *bytes_received = (packet.length <= size) ? packet.length : size;
-    memcpy(buffer, packet.data, *bytes_received);
-
-    return MID_SUCCESS;
+    (void)timeout; // Unused parameter
+    // TODO: Implement data receiving
+    return MID_ERROR;
 }
 
 /*********************************************************************

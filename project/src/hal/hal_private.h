@@ -13,6 +13,7 @@
 extern "C" {
 #endif
 
+#include "hal.h"
 #include "hal_storage.h"
 
 /*********************************************************************
@@ -69,7 +70,6 @@ typedef struct {
 typedef struct {
     callback_t callback;  /* Callback function */
     void *param;         /* Callback parameter */
-    uint32_t event_id;   /* Event identifier */
 } hal_callback_t;
 
 /* Hardware register map */

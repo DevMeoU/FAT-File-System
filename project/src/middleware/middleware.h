@@ -18,7 +18,7 @@ extern "C" {
  *********************************************************************/
 #include <stdint.h>
 #include <stdbool.h>
-#include "common_type.h"
+#include "../common/common_types.h"
 #include "fat_driver.h"
 #include "ip_driver.h"
 

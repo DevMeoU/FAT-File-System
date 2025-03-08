@@ -58,6 +58,10 @@ typedef struct {
     uint32_t timeout;         /* Timeout mặc định (ms) */
     bool interrupt_enable;    /* Cho phép ngắt */
     uint8_t storage_type;    /* Loại storage đang sử dụng */
+    uint32_t sector_size;    /* Kích thước sector */
+    uint32_t sector_count;   /* Số lượng sector */
+    bool use_cache;          /* Sử dụng cache */
+    bool use_dma;           /* Sử dụng DMA */
 } hal_config_t;
 
 /* Device Information */

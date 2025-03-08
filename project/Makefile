@@ -9,15 +9,16 @@ PROJECT_NAME := application
 #------------------
 # Công cụ build
 #------------------
-CC        := gcc
+CC        := C:\cygwin64\bin\gcc.exe
 RM        := rm -rf
 MKDIR     := mkdir -p
 
 #------------------
 # Thư mục
 #------------------
-SRC_DIR   := src
-BUILD_DIR := build
+ROOT_DIR  := .
+SRC_DIR   := $(ROOT_DIR)/src
+BUILD_DIR := $(ROOT_DIR)/build
 OBJ_DIR   := $(BUILD_DIR)/obj
 BIN_DIR   := $(BUILD_DIR)/bin
 DEP_DIR   := $(BUILD_DIR)/dep
@@ -26,7 +27,7 @@ DEP_DIR   := $(BUILD_DIR)/dep
 # Các file nguồn
 #------------------
 # Tìm tất cả các file .c trong thư mục src và thư mục con
-SRCS := $(shell find $(SRC_DIR) -name "*.c" ! -path "$(SRC_DIR)/template/*")
+SRCS := $(shell find $(SRC_DIR) -name "*.c" ! -path "$(SRC_DIR)/template/*" ! -name "fat_driver_impl.c")
 
 # Tạo danh sách file object tương ứng
 OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
@@ -37,29 +38,50 @@ DEPS := $(SRCS:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
 #------------------
 # Cờ biên dịch
 #------------------
+# Include paths
+INC_DIRS := $(SRC_DIR) \
+            $(SRC_DIR)/common \
+            $(SRC_DIR)/ip_driver \
+            $(SRC_DIR)/hal \
+            $(SRC_DIR)/fat_driver \
+            $(SRC_DIR)/middleware \
+            $(SRC_DIR)/application \
+            $(SRC_DIR)/utilities/linkedlist \
+            $(SRC_DIR)/utilities/log
+
+# Convert include directories to -I flags
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+# Basic flags
 CFLAGS := -Wall -Wextra -Werror \
+          -Wno-unused-parameter \
+          -Wno-unused-variable \
+          -Wno-unused-function \
+          -Wno-maybe-uninitialized \
+          -std=c11 \
           -fdiagnostics-color=always \
           -g \
           -O2 \
           -MMD -MP \
-          -I$(SRC_DIR)/ip_driver \
-          -I$(SRC_DIR)/hal \
-          -I$(SRC_DIR)/fat_driver \
-          -I$(SRC_DIR)/middleware \
-          -I$(SRC_DIR)/application \
-          -I$(SRC_DIR)/utilities/linkedlist \
-          -I$(SRC_DIR)/utilities/log \
-          -I$(SRC_DIR)/utilities/status
+          $(INC_FLAGS)
 
-LDFLAGS := -lm -v
-ifeq ($(DUMP), ON)
+# Linker flags
+LDFLAGS := -lm -lpthread -v
+
+# Thêm cờ debug nếu cần
+ifeq ($(DEBUG), ON)
+CFLAGS += -g -DDEBUG
+endif
+
+# Thêm cờ verbose nếu cần
+ifeq ($(VERBOSE), ON)
 CFLAGS += -v
 endif
 
 #------------------
 # File đích
 #------------------
-TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
+TARGET := $(BIN_DIR)/$(PROJECT_NAME)
 
 #------------------
 # Các target
@@ -72,51 +94,50 @@ all: release
 # Build bản release (có tối ưu)
 release: CFLAGS += -O2 -DNDEBUG
 release: $(TARGET)
-	@echo "Build release hoàn thành: $(TARGET)"
+	@echo "Build release hoàn thành"
 
 # Build bản debug
 debug: CFLAGS += -g -DDEBUG
-debug: $(TARGET) 
-	@echo "Build debug hoàn thành: $(TARGET)"
+debug: $(TARGET)
+	@echo "Build debug hoàn thành"
 
 # Build file thực thi
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) | $(BIN_DIR)
 	@echo "Linking $@..."
-	@$(MKDIR) $(dir $@)
 	@$(CC) $(OBJS) $(LDFLAGS) -o $@
 	@echo "Build hoàn thành!"
 
 # Compile các file nguồn
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	@echo "Compiling $<..."
 	@$(MKDIR) $(dir $@)
 	@$(MKDIR) $(dir $(DEP_DIR)/$*.d)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# Chạy chương trình
+# Tạo các thư mục cần thiết
+$(BIN_DIR) $(OBJ_DIR):
+	@$(MKDIR) $@
+
+# Clean
+clean:
+	@echo "Cleaning..."
+	@$(RM) $(BUILD_DIR)
+	@echo "Clean hoàn thành!"
+
+# Run
 run: $(TARGET)
-	@echo "Đang chạy $(TARGET)..."
+	@echo "Running $(TARGET)..."
 	@./$(TARGET)
 
-# Dọn dẹp
-clean:
-	@echo "Đang dọn dẹp..."
-	@$(RM) $(BUILD_DIR)
-	@echo "Đã xóa thư mục build!"
-
-# Hiển thị trợ giúp
+# Help
 help:
 	@echo "Các target có sẵn:"
-	@echo "  all      - Build bản release (mặc định)"
-	@echo "  debug    - Build bản debug có symbol"
-	@echo "  release  - Build bản release đã tối ưu"
+	@echo "  all      - Build tất cả (mặc định)"
+	@echo "  release  - Build bản release"
+	@echo "  debug    - Build bản debug"
+	@echo "  clean    - Xóa các file build"
 	@echo "  run      - Chạy chương trình"
-	@echo "  clean    - Xóa các file đã build"
-	@echo "  help     - Hiển thị trợ giúp này"
+	@echo "  help     - Hiển thị help này"
 
-# In giá trị biến để debug Makefile
-print-%:
-	@echo $* = $($*)
-
-# Include các file dependency
+# Include dependency files
 -include $(DEPS)

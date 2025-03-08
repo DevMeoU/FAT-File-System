@@ -18,12 +18,18 @@ extern "C" {
  *********************************************************************/
 #include <stdint.h>
 #include <stdbool.h>
-#include "common_type.h"
-#include "middleware.h"
+#include "../common/common_types.h"
+#include "../middleware/middleware.h"
 
 /*********************************************************************
  * Macro Definitions
  *********************************************************************/
+
+/* Buffer sizes */
+#define APP_PATH_BUF_SIZE   256    /* Kích thước buffer đường dẫn */
+#define APP_CMD_BUF_SIZE    256    /* Kích thước buffer lệnh */
+#define APP_DATA_BUF_SIZE   4096   /* Kích thước buffer dữ liệu */
+#define APP_MAX_ARGS        16     /* Số lượng tham số tối đa */
 
 /* Command Code */
 #define APP_CMD_HELP        "help"    /* Hiển thị trợ giúp */
@@ -73,11 +79,6 @@ extern "C" {
 #define APP_INVALID_CMD    -10               /* Lệnh không hợp lệ */
 #define APP_INVALID_ARG    -11               /* Tham số không hợp lệ */
 
-/* Buffer Size */
-#define APP_CMD_BUF_SIZE   256     /* Kích thước buffer lệnh */
-#define APP_PATH_BUF_SIZE  1024    /* Kích thước buffer đường dẫn */
-#define APP_DATA_BUF_SIZE  4096    /* Kích thước buffer dữ liệu */
-
 /*********************************************************************
  * Type Definitions
  *********************************************************************/
@@ -120,7 +121,7 @@ int32_t app_run(void);
 /**
  * @brief Xử lý lệnh
  * 
- * @param cmd_line Chuỗi lệnh
+ * @param cmd_line Chuỗi lệnh cần xử lý
  * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
 int32_t app_process_command(const char *cmd_line);

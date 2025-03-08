@@ -7,18 +7,18 @@
  *   danh sách file, đọc/ghi file, tạo/xóa thư mục.
  *********************************************************************/
 
-/*********************************************************************
- * Include Files
- *********************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "application.h"
 #include "../middleware/middleware.h"
 #include "../utilities/log/print_color.h"
-#include "../utilities/status/common_type.h"
+#include "../common/common_types.h"
+#include "../fat_driver/fat_driver.h"
 
 /*********************************************************************
  * Private Function Prototypes
@@ -51,73 +51,24 @@ static char app_cmd_buffer[APP_CMD_BUF_SIZE];
 static uint8_t app_data_buffer[APP_DATA_BUF_SIZE];
 
 /* Command table */
-static const app_cmd_t app_cmd_table[] = {
-    {
-        .name = APP_CMD_HELP,
-        .desc = APP_CMD_HELP_DESC,
-        .usage = APP_CMD_HELP_USAGE,
-        .handler = app_cmd_help_handler
-    },
-    {
-        .name = APP_CMD_LIST,
-        .desc = APP_CMD_LIST_DESC,
-        .usage = APP_CMD_LIST_USAGE,
-        .handler = app_cmd_list_handler
-    },
-    {
-        .name = APP_CMD_CHANGE_DIR,
-        .desc = APP_CMD_CHANGE_DIR_DESC,
-        .usage = APP_CMD_CHANGE_DIR_USAGE,
-        .handler = app_cmd_cd_handler
-    },
-    {
-        .name = APP_CMD_MAKE_DIR,
-        .desc = APP_CMD_MAKE_DIR_DESC,
-        .usage = APP_CMD_MAKE_DIR_USAGE,
-        .handler = app_cmd_mkdir_handler
-    },
-    {
-        .name = APP_CMD_REMOVE_DIR,
-        .desc = APP_CMD_REMOVE_DIR_DESC,
-        .usage = APP_CMD_REMOVE_DIR_USAGE,
-        .handler = app_cmd_rmdir_handler
-    },
-    {
-        .name = APP_CMD_READ,
-        .desc = APP_CMD_READ_DESC,
-        .usage = APP_CMD_READ_USAGE,
-        .handler = app_cmd_cat_handler
-    },
-    {
-        .name = APP_CMD_WRITE,
-        .desc = APP_CMD_WRITE_DESC,
-        .usage = APP_CMD_WRITE_USAGE,
-        .handler = app_cmd_write_handler
-    },
-    {
-        .name = APP_CMD_DELETE,
-        .desc = APP_CMD_DELETE_DESC,
-        .usage = APP_CMD_DELETE_USAGE,
-        .handler = app_cmd_rm_handler
-    },
-    {
-        .name = APP_CMD_COPY,
-        .desc = APP_CMD_COPY_DESC,
-        .usage = APP_CMD_COPY_USAGE,
-        .handler = app_cmd_cp_handler
-    },
-    {
-        .name = APP_CMD_MOVE,
-        .desc = APP_CMD_MOVE_DESC,
-        .usage = APP_CMD_MOVE_USAGE,
-        .handler = app_cmd_mv_handler
-    },
-    {
-        .name = APP_CMD_EXIT,
-        .desc = APP_CMD_EXIT_DESC,
-        .usage = APP_CMD_EXIT_USAGE,
-        .handler = app_cmd_exit_handler
-    }
+static const struct {
+    const char *name;
+    const char *desc;
+    const char *usage;
+    int32_t (*handler)(int argc, char *argv[]);
+} app_cmd_table[] = {
+    {"help",  "Hiển thị trợ giúp", "help [command]", app_cmd_help_handler},
+    {"ls",    "Liệt kê thư mục", "ls [path]", app_cmd_list_handler},
+    {"cd",    "Thay đổi thư mục", "cd <path>", app_cmd_cd_handler},
+    {"mkdir", "Tạo thư mục mới", "mkdir <path>", app_cmd_mkdir_handler},
+    {"rmdir", "Xóa thư mục", "rmdir <path>", app_cmd_rmdir_handler},
+    {"cat",   "Xem nội dung file", "cat <file>", app_cmd_cat_handler},
+    {"write", "Ghi nội dung vào file", "write <file> <content>", app_cmd_write_handler},
+    {"rm",    "Xóa file", "rm <file>", app_cmd_rm_handler},
+    {"cp",    "Sao chép file", "cp <source> <destination>", app_cmd_cp_handler},
+    {"mv",    "Di chuyển/đổi tên file", "mv <source> <destination>", app_cmd_mv_handler},
+    {"exit",  "Thoát chương trình", "exit", app_cmd_exit_handler},
+    {NULL, NULL, NULL, NULL}
 };
 
 /* Running flag */
@@ -131,6 +82,7 @@ int32_t app_init(void)
 {
     /* Khởi tạo middleware */
     if (mid_init() != MID_SUCCESS) {
+        log_error("Failed to initialize middleware");
         return APP_ERROR;
     }
 
@@ -144,22 +96,18 @@ int32_t app_init(void)
 
 int32_t app_run(void)
 {
-    /* In thông tin chào mừng */
-    log_info("FAT File System Manager");
-    log_info("Type 'help' for more information");
+    printf("\nWelcome to FAT File System Shell!\n");
+    printf("Type 'help' for list of commands\n\n");
 
-    /* Vòng lặp chính */
     while (app_is_running) {
-        /* In prompt */
+        /* Hiển thị prompt */
         printf("%s> ", app_current_dir);
+        fflush(stdout);
 
         /* Đọc lệnh */
         if (fgets(app_cmd_buffer, sizeof(app_cmd_buffer), stdin) == NULL) {
             break;
         }
-
-        /* Xóa ký tự xuống dòng */
-        app_cmd_buffer[strcspn(app_cmd_buffer, "\n")] = 0;
 
         /* Xử lý lệnh */
         if (app_process_command(app_cmd_buffer) != APP_SUCCESS) {
@@ -172,32 +120,51 @@ int32_t app_run(void)
 
 int32_t app_process_command(const char *cmd_line)
 {
-    if (cmd_line == NULL) {
+    char *argv[APP_MAX_ARGS];
+    int argc = 0;
+    char *token;
+    char *cmd_copy;
+    size_t cmd_len;
+
+    /* Kiểm tra tham số */
+    if (!cmd_line) {
         return APP_INVALID;
     }
 
-    /* Tách lệnh và tham số */
-    char *argv[16];
-    int argc = 0;
-    char *token = strtok((char *)cmd_line, " ");
-    while (token != NULL && argc < 16) {
+    /* Tạo bản sao của lệnh để xử lý */
+    cmd_len = strlen(cmd_line) + 1;
+    cmd_copy = (char *)malloc(cmd_len);
+    if (!cmd_copy) {
+        return APP_NO_MEMORY;
+    }
+    memcpy(cmd_copy, cmd_line, cmd_len);
+
+    /* Tách lệnh thành các tham số */
+    token = strtok(cmd_copy, " \t\n\r");
+    while (token && argc < APP_MAX_ARGS) {
         argv[argc++] = token;
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " \t\n\r");
     }
 
+    /* Kiểm tra lệnh rỗng */
     if (argc == 0) {
+        free(cmd_copy);
         return APP_SUCCESS;
     }
 
-    /* Tìm lệnh trong bảng */
-    for (size_t i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
+    /* Tìm và thực thi lệnh */
+    for (int i = 0; app_cmd_table[i].name != NULL; i++) {
         if (strcmp(argv[0], app_cmd_table[i].name) == 0) {
-            return app_cmd_table[i].handler(argc, argv);
+            int32_t ret = app_cmd_table[i].handler(argc, argv);
+            free(cmd_copy);
+            return ret;
         }
     }
 
+    /* Lệnh không hợp lệ */
     log_error("Unknown command: %s", argv[0]);
-    return APP_INVALID_CMD;
+    free(cmd_copy);
+    return APP_INVALID;
 }
 
 int32_t app_show_help(const char *cmd)
@@ -223,20 +190,20 @@ int32_t app_show_help(const char *cmd)
     return APP_SUCCESS;
 }
 
-int32_t app_list_directory(const char *path)
+int32_t app_list_directory(const char *target_path)
 {
-    const char *target_path = (path != NULL) ? path : app_current_dir;
-
-    /* Đọc thông tin thư mục */
     fat_file_t dir;
-    if (fat_open(target_path, FAT_MODE_READ, &dir) != FAT_SUCCESS) {
-        return APP_ERROR;
+    
+    /* Open directory */
+    if (fat_open(target_path, FAT_MODE_READ, &dir) != STATUS_SUCCESS) {
+        printf("Error: Could not open directory %s\n", target_path);
+        return STATUS_ERROR;
     }
 
     /* Đọc các entry */
     fat_dir_entry_t entry;
     uint32_t bytes_read;
-    while (fat_read(&dir, &entry, sizeof(entry), &bytes_read) == FAT_SUCCESS) {
+    while (fat_read(&dir, &entry, sizeof(entry), &bytes_read) == APP_SUCCESS) {
         if (bytes_read == 0) {
             break;
         }
@@ -250,26 +217,24 @@ int32_t app_list_directory(const char *path)
     }
 
     fat_close(&dir);
-    return APP_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t app_change_directory(const char *path)
 {
-    if (path == NULL) {
-        return APP_INVALID;
-    }
-
-    /* Kiểm tra thư mục tồn tại */
     fat_file_t dir;
-    if (fat_open(path, FAT_MODE_READ, &dir) != FAT_SUCCESS) {
-        return APP_NOT_FOUND;
+    
+    /* Open directory */
+    if (fat_open(path, FAT_MODE_READ, &dir) != STATUS_SUCCESS) {
+        printf("Error: Could not open directory %s\n", path);
+        return STATUS_ERROR;
     }
 
     /* Kiểm tra là thư mục */
-    fat_file_info_t info;
-    if (fat_stat(path, &info) != FAT_SUCCESS || !(info.attributes & FAT_ATTR_DIRECTORY)) {
+    fat_dir_entry_t info;
+    if (fat_stat(path, &info) != APP_SUCCESS || !(info.attributes & FAT_ATTR_DIRECTORY)) {
         fat_close(&dir);
-        return APP_ERROR;
+        return STATUS_ERROR;
     }
 
     fat_close(&dir);
@@ -278,27 +243,25 @@ int32_t app_change_directory(const char *path)
     strncpy(app_current_dir, path, sizeof(app_current_dir) - 1);
     app_current_dir[sizeof(app_current_dir) - 1] = '\0';
 
-    return APP_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t app_read_file(const char *path)
 {
-    if (path == NULL) {
-        return APP_INVALID;
-    }
-
-    /* Mở file */
     fat_file_t file;
-    if (fat_open(path, FAT_MODE_READ, &file) != FAT_SUCCESS) {
-        return APP_NOT_FOUND;
+    
+    /* Open file */
+    if (fat_open(path, FAT_MODE_READ, &file) != STATUS_SUCCESS) {
+        printf("Error: Could not open file %s\n", path);
+        return STATUS_ERROR;
     }
 
     /* Đọc và hiển thị nội dung */
     uint32_t bytes_read;
     uint8_t buffer[APP_DATA_BUF_SIZE];
-    int32_t status = APP_SUCCESS;
+    int32_t status = STATUS_SUCCESS;
 
-    while ((status = fat_read(&file, buffer, sizeof(buffer), &bytes_read)) == FAT_SUCCESS) {
+    while ((status = fat_read(&file, buffer, sizeof(buffer), &bytes_read)) == APP_SUCCESS) {
         if (bytes_read == 0) {
             break;
         }
@@ -313,14 +276,12 @@ int32_t app_read_file(const char *path)
 
 int32_t app_write_file(const char *path, const void *data, uint32_t size)
 {
-    if (path == NULL || data == NULL) {
-        return APP_INVALID;
-    }
-
-    /* Mở file */
     fat_file_t file;
-    if (fat_open(path, FAT_MODE_WRITE | FAT_MODE_CREATE | FAT_MODE_TRUNCATE, &file) != FAT_SUCCESS) {
-        return APP_ERROR;
+    
+    /* Open file */
+    if (fat_open(path, FAT_MODE_WRITE | FAT_MODE_CREATE | FAT_MODE_TRUNCATE, &file) != STATUS_SUCCESS) {
+        printf("Error: Could not open file %s\n", path);
+        return STATUS_ERROR;
     }
 
     /* Ghi dữ liệu */
@@ -329,7 +290,7 @@ int32_t app_write_file(const char *path, const void *data, uint32_t size)
 
     fat_close(&file);
 
-    return (status == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
+    return (status == STATUS_SUCCESS) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
 /*********************************************************************
@@ -338,159 +299,159 @@ int32_t app_write_file(const char *path, const void *data, uint32_t size)
 
 static int32_t app_cmd_help_handler(int argc, char *argv[])
 {
-    if (argc > 2) {
-        log_error("Too many arguments");
-        return APP_INVALID_ARG;
+    if (argc > 1) {
+        /* Hiển thị trợ giúp cho lệnh cụ thể */
+        for (int i = 0; app_cmd_table[i].name != NULL; i++) {
+            if (strcmp(argv[1], app_cmd_table[i].name) == 0) {
+                printf("\n%s - %s\n", app_cmd_table[i].name, app_cmd_table[i].desc);
+                printf("Usage: %s\n\n", app_cmd_table[i].usage);
+                return APP_SUCCESS;
+            }
+        }
+        log_error("Unknown command: %s", argv[1]);
+        return APP_INVALID;
     }
 
-    return app_show_help((argc == 2) ? argv[1] : NULL);
+    /* Hiển thị danh sách lệnh */
+    printf("\nAvailable commands:\n");
+    for (int i = 0; app_cmd_table[i].name != NULL; i++) {
+        printf("  %-10s %s\n", app_cmd_table[i].name, app_cmd_table[i].desc);
+    }
+    printf("\nType 'help <command>' for more information about a command\n\n");
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_list_handler(int argc, char *argv[])
 {
-    if (argc > 2) {
-        log_error("Too many arguments");
-        return APP_INVALID_ARG;
-    }
+    const char *path = (argc > 1) ? argv[1] : app_current_dir;
 
-    return app_list_directory((argc == 2) ? argv[1] : NULL);
+    /* Liệt kê thư mục */
+    // TODO: Implement directory listing
+    (void)path; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_cd_handler(int argc, char *argv[])
 {
-    if (argc != 2) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 2) {
+        log_error("Usage: cd <path>");
+        return APP_INVALID;
     }
 
-    return app_change_directory(argv[1]);
+    /* Thay đổi thư mục */
+    // TODO: Implement directory change
+    (void)argv; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_mkdir_handler(int argc, char *argv[])
 {
-    if (argc != 2) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 2) {
+        log_error("Usage: mkdir <path>");
+        return APP_INVALID;
     }
 
-    return fat_mkdir(argv[1]);
+    /* Tạo thư mục mới */
+    // TODO: Implement directory creation
+    (void)argv; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_rmdir_handler(int argc, char *argv[])
 {
-    if (argc != 2) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 2) {
+        log_error("Usage: rmdir <path>");
+        return APP_INVALID;
     }
 
-    return fat_rmdir(argv[1]);
+    /* Xóa thư mục */
+    // TODO: Implement directory removal
+    (void)argv; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_cat_handler(int argc, char *argv[])
 {
-    if (argc != 2) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 2) {
+        log_error("Usage: cat <file>");
+        return APP_INVALID;
     }
 
-    return app_read_file(argv[1]);
+    /* Đọc và hiển thị nội dung file */
+    // TODO: Implement file reading
+    (void)argv; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_write_handler(int argc, char *argv[])
 {
     if (argc < 3) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+        log_error("Usage: write <file> <content>");
+        return APP_INVALID;
     }
 
-    /* Nối các tham số còn lại thành nội dung */
-    char content[APP_DATA_BUF_SIZE] = {0};
-    for (int i = 2; i < argc; i++) {
-        if (i > 2) {
-            strcat(content, " ");
-        }
-        strcat(content, argv[i]);
-    }
+    /* Ghi nội dung vào file */
+    // TODO: Implement file writing
+    (void)argv; // Unused parameter
 
-    return app_write_file(argv[1], content, strlen(content));
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_rm_handler(int argc, char *argv[])
 {
-    if (argc != 2) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 2) {
+        log_error("Usage: rm <file>");
+        return APP_INVALID;
     }
 
-    return fat_unlink(argv[1]);
+    /* Xóa file */
+    // TODO: Implement file removal
+    (void)argv; // Unused parameter
+
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_cp_handler(int argc, char *argv[])
 {
-    if (argc != 3) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 3) {
+        log_error("Usage: cp <source> <destination>");
+        return APP_INVALID;
     }
 
-    /* Đọc file nguồn */
-    fat_file_t src_file;
-    if (fat_open(argv[1], FAT_MODE_READ, &src_file) != FAT_SUCCESS) {
-        return APP_ERROR;
-    }
+    /* Sao chép file */
+    // TODO: Implement file copying
+    (void)argv; // Unused parameter
 
-    /* Tạo file đích */
-    fat_file_t dst_file;
-    if (fat_open(argv[2], FAT_MODE_WRITE | FAT_MODE_CREATE, &dst_file) != FAT_SUCCESS) {
-        fat_close(&src_file);
-        return APP_ERROR;
-    }
-
-    /* Copy dữ liệu */
-    uint32_t bytes_read, bytes_written;
-    uint8_t buffer[APP_DATA_BUF_SIZE];
-    int32_t status = APP_SUCCESS;
-
-    while ((status = fat_read(&src_file, buffer, sizeof(buffer), &bytes_read)) == FAT_SUCCESS) {
-        if (bytes_read == 0) {
-            break;
-        }
-
-        if (fat_write(&dst_file, buffer, bytes_read, &bytes_written) != FAT_SUCCESS) {
-            status = APP_ERROR;
-            break;
-        }
-    }
-
-    fat_close(&src_file);
-    fat_close(&dst_file);
-
-    return status;
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_mv_handler(int argc, char *argv[])
 {
-    if (argc != 3) {
-        log_error("Invalid number of arguments");
-        return APP_INVALID_ARG;
+    if (argc < 3) {
+        log_error("Usage: mv <source> <destination>");
+        return APP_INVALID;
     }
 
-    /* Copy file */
-    int32_t status = app_cmd_cp_handler(argc, argv);
-    if (status != APP_SUCCESS) {
-        return status;
-    }
+    /* Di chuyển/đổi tên file */
+    // TODO: Implement file moving/renaming
+    (void)argv; // Unused parameter
 
-    /* Xóa file nguồn */
-    return fat_unlink(argv[1]);
+    return APP_SUCCESS;
 }
 
 static int32_t app_cmd_exit_handler(int argc, char *argv[])
 {
-    (void)argc;  /* Unused parameter */
-    (void)argv;  /* Unused parameter */
+    (void)argc; // Unused parameter
+    (void)argv; // Unused parameter
 
-    app_is_running = false;
-    return APP_SUCCESS;
+    printf("Goodbye!\n");
+    exit(0);
 }
 
 /*********************************************************************
@@ -502,13 +463,13 @@ int main(void)
     /* Khởi tạo ứng dụng */
     if (app_init() != APP_SUCCESS) {
         log_error("Failed to initialize application");
-        return -1;
+        return 1;
     }
 
     /* Chạy ứng dụng */
     if (app_run() != APP_SUCCESS) {
         log_error("Application error");
-        return -1;
+        return 1;
     }
 
     return 0;

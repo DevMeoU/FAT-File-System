@@ -91,6 +91,7 @@ static uint32_t hal_write_ring_buffer(hal_ring_buffer_t *buffer, const uint8_t *
  * @param size Maximum data size to read
  * @return Number of bytes read
  */
+__attribute__((unused))
 static uint32_t hal_read_ring_buffer(hal_ring_buffer_t *buffer, uint8_t *data, uint32_t size)
 {
     if (buffer == NULL || data == NULL || size == 0) {
@@ -134,6 +135,65 @@ static void hal_irq_handler(void)
     
     // Clear interrupt status
     hal_ctx.reg->int_status = int_status;
+}
+
+/**
+ * @brief Quản lý cache
+ * 
+ * @param sector Sector number
+ * @param data Data buffer
+ * @param write true if write operation
+ * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+__attribute__((unused))
+static int32_t hal_cache_manage(uint32_t sector,
+                              uint8_t *data,
+                              bool write)
+{
+    if (!data) {
+        return HAL_INVALID_PARAM;
+    }
+
+    // Kiểm tra cache hit
+    if (hal_ctx.cache.valid && hal_ctx.cache.sector == sector) {
+        if (write) {
+            // Cập nhật cache và đánh dấu dirty
+            memcpy(hal_ctx.cache.data, data, STORAGE_MAX_SECTOR_SIZE);
+            hal_ctx.cache.dirty = true;
+        } else {
+            // Đọc từ cache
+            memcpy(data, hal_ctx.cache.data, STORAGE_MAX_SECTOR_SIZE);
+        }
+        return HAL_SUCCESS;
+    }
+
+    // Cache miss, cần flush cache cũ nếu dirty
+    if (hal_ctx.cache.valid && hal_ctx.cache.dirty) {
+        int32_t ret = hal_write_sector(hal_ctx.cache.sector, hal_ctx.cache.data);
+        if (ret != HAL_SUCCESS) {
+            return ret;
+        }
+    }
+
+    // Đọc sector mới vào cache
+    int32_t ret = hal_read_sector(sector, hal_ctx.cache.data);
+    if (ret != HAL_SUCCESS) {
+        hal_ctx.cache.valid = false;
+        return ret;
+    }
+
+    // Cập nhật cache
+    hal_ctx.cache.sector = sector;
+    hal_ctx.cache.valid = true;
+    hal_ctx.cache.dirty = write;
+
+    if (write) {
+        memcpy(hal_ctx.cache.data, data, STORAGE_MAX_SECTOR_SIZE);
+    } else {
+        memcpy(data, hal_ctx.cache.data, STORAGE_MAX_SECTOR_SIZE);
+    }
+
+    return HAL_SUCCESS;
 }
 
 /*********************************************************************
@@ -283,46 +343,36 @@ int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout) {
 
 int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
 {
-    if (callback == NULL || event_id >= HAL_MAX_CALLBACKS) {
+    (void)event_id; // Unused parameter
+    if (!callback) {
         return HAL_INVALID_PARAM;
     }
 
-    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
-        return HAL_ERROR;
-    }
-
-    /* Find empty slot */
+    // Tìm slot trống
     for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
         if (hal_ctx.callbacks[i].callback == NULL) {
             hal_ctx.callbacks[i].callback = callback;
-            hal_ctx.callbacks[i].event_id = event_id;
+            hal_ctx.callbacks[i].param = NULL;
             return HAL_SUCCESS;
         }
     }
 
-    return HAL_ERROR;  /* No empty slots */
+    return HAL_ERROR;
 }
 
 int32_t hal_unregister_callback(uint32_t event_id)
 {
-    if (event_id >= HAL_MAX_CALLBACKS) {
-        return HAL_INVALID_PARAM;
-    }
-
-    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
-        return HAL_ERROR;
-    }
-
-    /* Find and remove callback */
+    (void)event_id; // Unused parameter
+    // Tìm callback cần xóa
     for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
-        if (hal_ctx.callbacks[i].event_id == event_id) {
+        if (hal_ctx.callbacks[i].callback != NULL) {
             hal_ctx.callbacks[i].callback = NULL;
-            hal_ctx.callbacks[i].event_id = 0;
+            hal_ctx.callbacks[i].param = NULL;
             return HAL_SUCCESS;
         }
     }
 
-    return HAL_ERROR;  /* Callback not found */
+    return HAL_ERROR;
 }
 
 int32_t hal_set_transfer_mode(hal_transfer_mode_t mode) {

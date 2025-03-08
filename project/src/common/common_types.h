@@ -19,26 +19,39 @@ extern "C" {
  * Common Status Codes
  *********************************************************************/
 
-/* Success codes (0x00 - 0x0F) */
-#define STATUS_SUCCESS           0x00
-#define STATUS_PENDING          0x01
-#define STATUS_TIMEOUT          0x02
-#define STATUS_PARTIAL          0x03
+/* Success codes */
+#define STATUS_SUCCESS          0    /* Thành công */
 
-/* Error codes (0x10 - 0x1F) */
-#define STATUS_ERROR            0x10
-#define STATUS_INVALID          0x11
-#define STATUS_NOT_READY        0x12
-#define STATUS_BUSY            0x13
-#define STATUS_TIMEOUT_ERROR   0x14
-#define STATUS_OVERFLOW        0x15
-#define STATUS_CRC_ERROR       0x16
-#define STATUS_NOT_FOUND       0x17
+/* Error codes */
+#define STATUS_ERROR           -1    /* Lỗi chung */
+#define STATUS_INVALID         -2    /* Tham số không hợp lệ */
+#define STATUS_NOT_FOUND       -3    /* Không tìm thấy */
+#define STATUS_EXISTS          -4    /* Đã tồn tại */
+#define STATUS_DISK_FULL       -5    /* Đĩa đầy */
+#define STATUS_READ_ONLY       -6    /* Chỉ đọc */
+#define STATUS_EOF             -7    /* Hết tập tin */
+#define STATUS_INVALID_NAME    -8    /* Tên không hợp lệ */
+#define STATUS_ROOT_FULL       -9    /* Thư mục gốc đầy */
+#define STATUS_INVALID_PATH    -10   /* Đường dẫn không hợp lệ */
+#define STATUS_READ_FAILED     -11   /* Đọc thất bại */
+#define STATUS_WRITE_FAILED    -12   /* Ghi thất bại */
+#define STATUS_INVALID_PARAMETER -13  /* Tham số không hợp lệ */
+#define STATUS_NO_MEMORY       -14   /* Không đủ bộ nhớ */
+#define STATUS_NO_SPACE        -15   /* Không đủ không gian */
 
-/* Warning codes (0x20 - 0x2F) */
-#define STATUS_WARNING          0x20
-#define STATUS_WOULD_BLOCK      0x21
-#define STATUS_DEPRECATED       0x22
+/* System status codes */
+#define STATUS_NOT_READY       -20   /* Chưa sẵn sàng */
+#define STATUS_BUSY           -21   /* Đang bận */
+#define STATUS_TIMEOUT        -22   /* Hết thời gian chờ */
+#define STATUS_OVERFLOW       -23   /* Tràn bộ đệm */
+#define STATUS_CRC_ERROR      -24   /* Lỗi CRC */
+
+/* Warning codes */
+#define STATUS_WARNING        -30   /* Cảnh báo chung */
+#define STATUS_WOULD_BLOCK    -31   /* Sẽ bị block */
+#define STATUS_DEPRECATED     -32   /* Đã lỗi thời */
+#define STATUS_PARTIAL        -33   /* Thành công một phần */
+#define STATUS_PENDING        -34   /* Đang chờ xử lý */
 
 /*********************************************************************
  * Common Type Definitions
@@ -68,7 +81,7 @@ typedef struct {
     uint8_t minute;  /* Minute (0-59) */
     uint8_t second;  /* Second (0-59) */
     uint16_t ms;     /* Milliseconds (0-999) */
-} time_t;
+} fatfs_time_t;
 
 /* Callback function type */
 typedef void (*callback_t)(void *param);
