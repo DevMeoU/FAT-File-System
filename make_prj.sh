@@ -1,9 +1,8 @@
 #!/bin/bash
-# Danh sách các thư mục cần thiết theo cấu trúc mong muốn
+
+# Danh sách các thư mục cần thiết
 required_dirs=(
     "project"
-    "test"
-    "test/src"
     "project/src"
     "project/src/ip_driver"
     "project/src/hal"
@@ -11,58 +10,75 @@ required_dirs=(
     "project/src/middleware"
     "project/src/application"
     "project/src/utilities"
+    "project/src/utilities/log"
+    "project/src/utilities/status"
     "project/src/utilities/linkedlist"
 )
 
-echo "Kiểm tra và tạo các thư mục cần thiết..."
-# Tạo các thư mục nếu chưa tồn tại
+echo "=== Tạo cấu trúc dự án FAT File System Manager ==="
+
+# Tạo các thư mục
+echo "1. Tạo cấu trúc thư mục..."
 for dir in "${required_dirs[@]}"; do
     if [ ! -d "$dir" ]; then
-        echo "Tạo thư mục: $dir"
+        echo "  + Tạo: $dir"
         mkdir -p "$dir"
     else
-        echo "Thư mục đã tồn tại: $dir"
+        echo "  * Đã tồn tại: $dir"
     fi
 done
 
-# Xóa các thư mục thừa trong project/src (chỉ giữ: ip_driver, hal, fat_driver, middleware, application, utilities)
-echo "Kiểm tra project/src để tìm thư mục thừa..."
-if [ -d "project/src" ]; then
-    cd project/src || exit 1
-    for d in */ ; do
-        d=${d%/}  # Xóa dấu gạch chéo cuối
-        if [[ "$d" != "ip_driver" && "$d" != "hal" && "$d" != "fat_driver" && "$d" != "middleware" && "$d" != "application" && "$d" != "utilities" ]]; then
-            echo "Xóa thư mục thừa trong src: $d"
-            rm -rf "$d"
-        fi
-    done
-    cd - > /dev/null
-fi
+# Tạo các file trong ip_driver
+echo "2. Tạo files cho IP Driver..."
+touch project/src/ip_driver/ip_driver.h
+touch project/src/ip_driver/ip_driver.c
 
-# Xóa các thư mục thừa trong project/src/utilities (chỉ giữ: linkedlist)
-echo "Kiểm tra project/src/utilities để tìm thư mục thừa..."
-if [ -d "project/src/utilities" ]; then
-    cd project/src/utilities || exit 1
-    for d in */ ; do
-        d=${d%/}
-        if [[ "$d" != "linkedlist" ]]; then
-            echo "Xóa thư mục thừa trong utilities: $d"
-            rm -rf "$d"
-        fi
-    done
-    cd - > /dev/null
-fi
+# Tạo các file trong hal
+echo "3. Tạo files cho HAL..."
+touch project/src/hal/hal.h
+touch project/src/hal/hal.c
+touch project/src/hal/hal_private.h
 
-# Tạo các file mẫu nếu chưa tồn tại
-echo "Tạo các file mẫu nếu chưa tồn tại..."
-touch project/src/ip_driver/ip_driver.c project/src/ip_driver/ip_driver.h
-touch project/src/hal/hal.c project/src/hal/hal.h
-touch project/src/fat_driver/fat_driver.c project/src/fat_driver/fat_driver.h
-touch project/src/middleware/middleware.c project/src/middleware/middleware.h
-touch project/src/application/application.c project/src/application/application.h
-touch project/src/utilities/linkedlist/linkedlist.c project/src/utilities/linkedlist/linkedlist.h
+# Tạo các file trong fat_driver
+echo "4. Tạo files cho FAT Driver..."
+touch project/src/fat_driver/fat_driver.h
+touch project/src/fat_driver/fat_driver.c
+touch project/src/fat_driver/fat_driver_private.h
+touch project/src/fat_driver/fat_driver_private.c
+touch project/src/fat_driver/README.md
+
+# Tạo các file trong middleware
+echo "5. Tạo files cho Middleware..."
+touch project/src/middleware/middleware.h
+touch project/src/middleware/middleware.c
+
+# Tạo các file trong application
+echo "6. Tạo files cho Application..."
+touch project/src/application/application.h
+touch project/src/application/application.c
+
+# Tạo các file trong utilities
+echo "7. Tạo files cho Utilities..."
+# Log module
+touch project/src/utilities/log/print_color.h
+# Status module
+touch project/src/utilities/status/common_type.h
+# Linkedlist module
+touch project/src/utilities/linkedlist/linkedlist.h
+touch project/src/utilities/linkedlist/linkedlist.c
+
+# Tạo Makefile và README
+echo "8. Tạo Makefile và README..."
 touch project/Makefile
-touch test/src/test.c test/src/test.h  # Tạo thêm file .c và .h trong test
-touch test/Makefile.mak
+touch project/README.md
 
-echo "Cấu trúc dự án đã được cập nhật theo yêu cầu."
+echo "=== Hoàn thành tạo cấu trúc dự án ==="
+echo "Cấu trúc thư mục:"
+tree project/
+
+echo "
+Lưu ý:
+1. Các file header (.h) và source (.c) đã được tạo
+2. Cần thêm nội dung cho các file
+3. Cập nhật Makefile để build dự án
+4. Xem README.md để biết thêm chi tiết"
