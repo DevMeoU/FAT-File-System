@@ -6,116 +6,149 @@
 *   Định nghĩa các hàm và kiểu dữ liệu cho danh sách liên kết.
 */
 
-#ifndef LINKEDLIST_H
-#define LINKEDLIST_H
+#ifndef __LINKEDLIST_H
+#define __LINKEDLIST_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include "common_type.h"
 
 /*------------------------------*
 *    Linked List Data Types
 *------------------------------*/
 
 /* Node của danh sách liên kết */
-typedef struct llist_node {
-    void *data;                 /* Con trỏ đến dữ liệu */
-    size_t data_size;           /* Kích thước dữ liệu (byte) */
-    struct llist_node *next;    /* Con trỏ đến node kế tiếp */
-} llist_node_t;
+typedef struct node {
+    void *data;           /* Con trỏ đến dữ liệu */
+    struct node *next;    /* Con trỏ đến node tiếp theo */
+    struct node *prev;    /* Con trỏ đến node trước */
+} node_t;
 
 /* Danh sách liên kết */
-typedef struct linkedlist {
-    llist_node_t *head;         /* Node đầu danh sách */
-    llist_node_t *tail;         /* Node cuối danh sách */
-    size_t count;               /* Số lượng node */
+typedef struct {
+    node_t *head;         /* Con trỏ đến node đầu */
+    node_t *tail;         /* Con trỏ đến node cuối */
+    uint32_t size;        /* Kích thước danh sách */
+    bool is_circular;     /* Danh sách vòng */
 } linkedlist_t;
 
-/* Iterator cho danh sách liên kết */
-typedef struct linkedlist_iterator {
-    llist_node_t *current;
-} linkedlist_iterator_t;
+/* Compare Function Type */
+typedef int32_t (*compare_fn)(const void *a, const void *b);
+
+/* Free Function Type */
+typedef void (*free_fn)(void *data);
 
 /*------------------------------*
 *    Function Prototypes
 *------------------------------*/
 
 /**
- * @brief Khởi tạo một danh sách liên kết rỗng.
+ * @brief Khởi tạo danh sách liên kết
  *
- * @return Con trỏ đến danh sách liên kết hoặc NULL nếu thất bại.
+ * @param list Con trỏ đến danh sách
+ * @param is_circular Danh sách vòng hay không
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-linkedlist_t *llist_init(void);
+int32_t list_init(linkedlist_t *list, bool is_circular);
 
 /**
- * @brief Thêm một node chứa dữ liệu vào cuối danh sách.
+ * @brief Thêm node vào đầu danh sách
  *
- * @param list Con trỏ đến danh sách.
- * @param data Con trỏ đến dữ liệu cần thêm.
- * @param data_size Kích thước của dữ liệu (byte).
- * @return 0 nếu thành công, -1 nếu thất bại.
+ * @param list Con trỏ đến danh sách
+ * @param data Con trỏ đến dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int llist_add(linkedlist_t *list, const void *data, size_t data_size);
+int32_t list_push_front(linkedlist_t *list, void *data);
 
 /**
- * @brief Xóa node tại vị trí chỉ định khỏi danh sách.
+ * @brief Thêm node vào cuối danh sách
  *
- * @param list Con trỏ đến danh sách.
- * @param index Vị trí (0-based) của node cần xóa.
- * @return 0 nếu thành công, -1 nếu thất bại.
+ * @param list Con trỏ đến danh sách
+ * @param data Con trỏ đến dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int llist_remove(linkedlist_t *list, size_t index);
+int32_t list_push_back(linkedlist_t *list, void *data);
 
 /**
- * @brief Xóa toàn bộ các node trong danh sách (giữ nguyên cấu trúc danh sách).
+ * @brief Xóa node đầu danh sách
  *
- * @param list Con trỏ đến danh sách.
+ * @param list Con trỏ đến danh sách
+ * @param free_func Hàm giải phóng dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-void llist_clear(linkedlist_t *list);
+int32_t list_pop_front(linkedlist_t *list, free_fn free_func);
 
 /**
- * @brief Hủy và giải phóng toàn bộ bộ nhớ của danh sách.
+ * @brief Xóa node cuối danh sách
  *
- * @param list Con trỏ đến danh sách.
+ * @param list Con trỏ đến danh sách
+ * @param free_func Hàm giải phóng dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-void llist_destroy(linkedlist_t *list);
+int32_t list_pop_back(linkedlist_t *list, free_fn free_func);
 
 /**
- * @brief Lấy dữ liệu của node đầu tiên trong danh sách.
+ * @brief Chèn node vào vị trí chỉ định
  *
- * @param list Con trỏ đến danh sách.
- * @return Con trỏ đến dữ liệu của node đầu tiên hoặc NULL nếu danh sách rỗng.
+ * @param list Con trỏ đến danh sách
+ * @param data Con trỏ đến dữ liệu
+ * @param index Vị trí chèn
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-void *llist_get_first(linkedlist_t *list);
+int32_t list_insert(linkedlist_t *list, void *data, uint32_t index);
 
 /**
- * @brief Khởi tạo iterator cho danh sách.
+ * @brief Xóa node tại vị trí chỉ định
  *
- * @param list Con trỏ đến danh sách.
- * @param it Con trỏ đến cấu trúc iterator.
+ * @param list Con trỏ đến danh sách
+ * @param index Vị trí xóa
+ * @param free_func Hàm giải phóng dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-void llist_iterator_init(linkedlist_t *list, linkedlist_iterator_t *it);
+int32_t list_remove(linkedlist_t *list, uint32_t index, free_fn free_func);
 
 /**
- * @brief Kiểm tra xem còn node nào trong iterator hay không.
+ * @brief Tìm kiếm node trong danh sách
  *
- * @param it Con trỏ đến iterator.
- * @return 1 nếu còn node, 0 nếu không.
+ * @param list Con trỏ đến danh sách
+ * @param data Con trỏ đến dữ liệu cần tìm
+ * @param compare_func Hàm so sánh
+ * @return Con trỏ đến node nếu tìm thấy, NULL nếu không tìm thấy
  */
-int llist_iterator_has_next(linkedlist_iterator_t *it);
+node_t *list_find(linkedlist_t *list, const void *data, compare_fn compare_func);
 
 /**
- * @brief Lấy dữ liệu của node tiếp theo từ iterator.
+ * @brief Xóa toàn bộ danh sách
  *
- * @param it Con trỏ đến iterator.
- * @return Con trỏ đến dữ liệu của node tiếp theo hoặc NULL nếu không còn.
+ * @param list Con trỏ đến danh sách
+ * @param free_func Hàm giải phóng dữ liệu
+ * @return LIST_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-void *llist_iterator_next(linkedlist_iterator_t *it);
+int32_t list_clear(linkedlist_t *list, free_fn free_func);
+
+/**
+ * @brief Lấy kích thước danh sách
+ *
+ * @param list Con trỏ đến danh sách
+ * @return Kích thước danh sách
+ */
+uint32_t list_size(const linkedlist_t *list);
+
+/**
+ * @brief Kiểm tra danh sách rỗng
+ *
+ * @param list Con trỏ đến danh sách
+ * @return true nếu rỗng, false nếu không rỗng
+ */
+bool list_is_empty(const linkedlist_t *list);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LINKEDLIST_H */
+#endif /* __LINKEDLIST_H */

@@ -1,57 +1,132 @@
 /*********************************************************************
  * ✨ Author: Ducson9112k 🌟
+ * 
+ * Description:
+ *   Module Print Color cung cấp các macro để in màu trên terminal,
+ *   hỗ trợ việc hiển thị log với các màu sắc khác nhau để dễ phân biệt.
  *********************************************************************/
-#ifndef PRINT_COLOR_H
-#define PRINT_COLOR_H
+#ifndef __PRINT_COLOR_H
+#define __PRINT_COLOR_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*********************************************************************
- * Include
+ * Include Files
  *********************************************************************/
 #include <stdio.h>
-#include <string.h>
 
 /*********************************************************************
- * Define
+ * Macro Definitions
  *********************************************************************/
 
-// Định nghĩa macro cho mã màu văn bản ANSI
-#define ANSI_COLOR_BLACK   "\033[30m"
-#define ANSI_COLOR_RED     "\033[31m"
-#define ANSI_COLOR_GREEN   "\033[32m"
-#define ANSI_COLOR_YELLOW  "\033[33m"
-#define ANSI_COLOR_BLUE    "\033[34m"
-#define ANSI_COLOR_MAGENTA "\033[35m"
-#define ANSI_COLOR_CYAN    "\033[36m"
-#define ANSI_COLOR_WHITE   "\033[37m"
-#define ANSI_COLOR_RESET   "\033[0m"
+/* Text Colors */
+#define COLOR_BLACK     "\033[0;30m"
+#define COLOR_RED       "\033[0;31m"
+#define COLOR_GREEN     "\033[0;32m"
+#define COLOR_YELLOW    "\033[0;33m"
+#define COLOR_BLUE      "\033[0;34m"
+#define COLOR_PURPLE    "\033[0;35m"
+#define COLOR_CYAN      "\033[0;36m"
+#define COLOR_WHITE     "\033[0;37m"
 
-// Định nghĩa macro cho mã màu nền ANSI
-#define ANSI_BG_BLACK   "\033[40m"
-#define ANSI_BG_RED     "\033[41m"
-#define ANSI_BG_GREEN   "\033[42m"
-#define ANSI_BG_YELLOW  "\033[43m"
-#define ANSI_BG_BLUE    "\033[44m"
-#define ANSI_BG_MAGENTA "\033[45m"
-#define ANSI_BG_CYAN    "\033[46m"
-#define ANSI_BG_WHITE   "\033[47m"
+/* Bold Text Colors */
+#define COLOR_BOLD_BLACK   "\033[1;30m"
+#define COLOR_BOLD_RED     "\033[1;31m"
+#define COLOR_BOLD_GREEN   "\033[1;32m"
+#define COLOR_BOLD_YELLOW  "\033[1;33m"
+#define COLOR_BOLD_BLUE    "\033[1;34m"
+#define COLOR_BOLD_PURPLE  "\033[1;35m"
+#define COLOR_BOLD_CYAN    "\033[1;36m"
+#define COLOR_BOLD_WHITE   "\033[1;37m"
 
-#define PRINT_COLOR(color, fmt, ...) \
-    printf(color fmt ANSI_COLOR_RESET, ##__VA_ARGS__)
+/* Background Colors */
+#define COLOR_BG_BLACK     "\033[40m"
+#define COLOR_BG_RED       "\033[41m"
+#define COLOR_BG_GREEN     "\033[42m"
+#define COLOR_BG_YELLOW    "\033[43m"
+#define COLOR_BG_BLUE      "\033[44m"
+#define COLOR_BG_PURPLE    "\033[45m"
+#define COLOR_BG_CYAN      "\033[46m"
+#define COLOR_BG_WHITE     "\033[47m"
+
+/* Reset Color */
+#define COLOR_RESET     "\033[0m"
+
+/* Log Level Colors */
+#define COLOR_DEBUG     COLOR_CYAN
+#define COLOR_INFO      COLOR_GREEN
+#define COLOR_WARNING   COLOR_YELLOW
+#define COLOR_ERROR     COLOR_RED
+#define COLOR_FATAL     COLOR_BOLD_RED
 
 /*********************************************************************
- * Static function
+ * Function Macros
  *********************************************************************/
-// Hàm in văn bản với màu và nền
-static inline void print_colored(const char *text, const char *color, const char *bg_color) {
-    printf("%s%s%s%s", color, bg_color, text, ANSI_COLOR_RESET);
+
+/**
+ * @brief In chuỗi với màu chỉ định
+ * 
+ * @param color Mã màu
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define print_color(color, fmt, ...) \
+    printf(color fmt COLOR_RESET, ##__VA_ARGS__)
+
+/**
+ * @brief In log debug
+ * 
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define log_debug(fmt, ...) \
+    print_color(COLOR_DEBUG, "[DEBUG] " fmt "\n", ##__VA_ARGS__)
+
+/**
+ * @brief In log info
+ * 
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define log_info(fmt, ...) \
+    print_color(COLOR_INFO, "[INFO] " fmt "\n", ##__VA_ARGS__)
+
+/**
+ * @brief In log warning
+ * 
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define log_warning(fmt, ...) \
+    print_color(COLOR_WARNING, "[WARNING] " fmt "\n", ##__VA_ARGS__)
+
+/**
+ * @brief In log error
+ * 
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define log_error(fmt, ...) \
+    print_color(COLOR_ERROR, "[ERROR] " fmt "\n", ##__VA_ARGS__)
+
+/**
+ * @brief In log fatal
+ * 
+ * @param fmt Chuỗi định dạng
+ * @param ... Các tham số
+ */
+#define log_fatal(fmt, ...) \
+    print_color(COLOR_FATAL, "[FATAL] " fmt "\n", ##__VA_ARGS__)
+
+#ifdef __cplusplus
 }
-/*********************************************************************
- * Function prototypes
- *********************************************************************/
+#endif
 
-#endif /* PRINT_COLOR_H */
+#endif /* __PRINT_COLOR_H */
 
 /*********************************************************************
- * UUID: 7be660d6-55fa-417e-b30d-c44eecf89b71
+ * UUID: 5d7c1e9a-2b4f-4e85-9c6d-f8b2e3a1d5c9
  *********************************************************************/
 

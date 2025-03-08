@@ -1,75 +1,108 @@
 /*********************************************************************
  * ✨ Author: Ducson9112k 🌟
+ * 
+ * Description:
+ *   Module IP Driver cung cấp interface để tương tác với thiết bị
+ *   mạng IP, cho phép gửi và nhận dữ liệu qua giao thức IP.
  *********************************************************************/
-#ifndef IP_DRIVER_H
-#define IP_DRIVER_H
+#ifndef __IP_DRIVER_H
+#define __IP_DRIVER_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*********************************************************************
- * Include
+ * Include Files
  *********************************************************************/
-#include <stdio.h>
-#include <string.h>
 #include <stdint.h>
-#include <stddef.h> // Include for size_t
+#include <stdbool.h>
+#include <string.h>
 
 /*********************************************************************
- * Define
+ * Macro Definitions
  *********************************************************************/
 
- /*********************************************************************
- * Function prototypes
+/* Constants */
+#define IP_MAX_PACKET_SIZE    1500
+#define IP_MIN_PACKET_SIZE    20
+#define IP_DEFAULT_TTL        64
+
+/* Status codes */
+#define IP_SUCCESS            0x00
+#define IP_ERROR             -1
+#define IP_TIMEOUT           -2
+#define IP_INVALID_PARAM     -3
+
+/*********************************************************************
+ * Type Definitions
  *********************************************************************/
-/**
- * @brief Initialize the IP driver.
- *
- * @param img_path Path to the image file to be opened.
- * @return 0 if the file is successfully opened, -1 otherwise.
- */
-int ip_driver_init(const char *img_path);
+
+/* IP Address structure */
+typedef struct {
+    uint8_t bytes[4];    /* Địa chỉ IPv4 dạng byte array */
+} ip_addr_t;
+
+/* IP Configuration */
+typedef struct {
+    ip_addr_t ip_addr;     /* Địa chỉ IP */
+    ip_addr_t netmask;     /* Netmask */
+    ip_addr_t gateway;     /* Gateway */
+    bool dhcp_enabled;     /* Bật/tắt DHCP */
+} ip_config_t;
+
+/* Packet structure */
+typedef struct {
+    uint8_t *data;         /* Con trỏ đến dữ liệu */
+    uint16_t length;       /* Độ dài dữ liệu */
+    ip_addr_t src_addr;    /* Địa chỉ nguồn */
+    ip_addr_t dst_addr;    /* Địa chỉ đích */
+    uint8_t protocol;      /* Giao thức */
+    uint8_t ttl;          /* Time to live */
+} ip_packet_t;
+
+/*********************************************************************
+ * Public Function Prototypes
+ *********************************************************************/
 
 /**
- * @brief Reads data from the image file into the provided buffer.
+ * @brief Khởi tạo IP Driver
  *
- * This function seeks to the specified offset in the file and reads
- * the specified number of bytes into the buffer.
- *
- * @param offset The offset in the file from which to start reading.
- * @param buffer The buffer where the read data will be stored.
- * @param size The number of bytes to read from the file.
- * @return 0 if the read operation is successful, -1 if an error occurs.
+ * @param config Cấu hình IP
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int ip_driver_read(unsigned int offset, unsigned char *buffer, size_t size);
+int32_t ip_driver_init(const ip_config_t *config);
 
 /**
- * @brief Writes data from the provided buffer into the image file.
+ * @brief Gửi gói tin IP
  *
- * This function seeks to the specified offset in the file and writes
- * the specified number of bytes from the buffer.
- *
- * @param offset The offset in the file from which to start writing.
- * @param buffer The buffer containing the data to write.
- * @param size The number of bytes to write from the buffer.
- * @return 0 if the write operation is successful, -1 if an error occurs.
+ * @param packet Gói tin cần gửi
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int ip_driver_write(unsigned int offset, const unsigned char *buffer, size_t size);
+int32_t ip_driver_send(const ip_packet_t *packet);
 
 /**
- * @brief Closes the image file.
- *  
- * This function simply checks if the file pointer is non-null and
- * closes the file using fclose if it is.
- * */
-void ip_driver_close();
+ * @brief Nhận gói tin IP
+ *
+ * @param packet Con trỏ đến buffer lưu gói tin nhận được
+ * @param timeout_ms Thời gian timeout tính bằng ms
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t ip_driver_receive(ip_packet_t *packet, uint32_t timeout_ms);
+
+/**
+ * @brief Cập nhật cấu hình IP
+ *
+ * @param config Cấu hình IP mới
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t ip_driver_config(const ip_config_t *config);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* IP_DRIVER_H */
+#endif /* __IP_DRIVER_H */
 
 /*********************************************************************
  * UUID: 7be660d6-55fa-417e-b30d-c44eecf89b71

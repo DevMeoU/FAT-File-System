@@ -1,283 +1,252 @@
-/*
-* FAT Driver Header
-* Author: Ducson9112k
-*/
-
-#ifndef FAT_DRIVER_H
-#define FAT_DRIVER_H
+/*********************************************************************
+ * ✨ Author: Ducson9112k 🌟
+ * 
+ * Description:
+ *   Module FAT Driver cung cấp các hàm để đọc/ghi dữ liệu trên hệ thống
+ *   tập tin FAT (File Allocation Table). Hỗ trợ các phiên bản FAT12,
+ *   FAT16 và FAT32.
+ *********************************************************************/
+#ifndef __FAT_DRIVER_H
+#define __FAT_DRIVER_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/*********************************************************************
+ * Include Files
+ *********************************************************************/
 #include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
-#include <ctype.h>
-#include "linkedlist.h"
-#include "print_color.h"
+#include "common_type.h"
 
-/*===============================*
-*         Macro Definitions
-*===============================*/
+/*********************************************************************
+ * Macro Definitions
+ *********************************************************************/
 
-/* FAT driver status */
-#define FAT_DRIVER_ON  1U
-#define FAT_DRIVER_OFF 0U
+/* FAT Type */
+#define FAT_TYPE_12          12  /* FAT12 */
+#define FAT_TYPE_16          16  /* FAT16 */
+#define FAT_TYPE_32          32  /* FAT32 */
 
-/* Debug mode */
-#define FAT_DRIVER_DEBUG_MODE FAT_DRIVER_OFF
+/* Sector Size */
+#define FAT_SECTOR_SIZE      512 /* Kích thước sector */
 
-/* Bytes per sector */
-#define FAT_DRIVER_BYTES_PER_SECTOR 512U
+/* File Attributes */
+#define FAT_ATTR_READ_ONLY   0x01  /* Chỉ đọc */
+#define FAT_ATTR_HIDDEN      0x02  /* Ẩn */
+#define FAT_ATTR_SYSTEM      0x04  /* Hệ thống */
+#define FAT_ATTR_VOLUME_ID   0x08  /* Nhãn ổ đĩa */
+#define FAT_ATTR_DIRECTORY   0x10  /* Thư mục */
+#define FAT_ATTR_ARCHIVE     0x20  /* Lưu trữ */
+#define FAT_ATTR_LONG_NAME   0x0F  /* Tên dài */
 
-/* Boot Sector related */
-#define FAT_DRIVER_NUMBER_OF_BOOT_SECTORS 1U
-#define FAT_DRIVER_MAX_CLUSTER_OF_FATFS_12 4085U
-#define FAT_DRIVER_MAX_CLUSTER_OF_FATFS_16 65525U
+/* File Access Mode */
+#define FAT_MODE_READ        0x01  /* Đọc */
+#define FAT_MODE_WRITE       0x02  /* Ghi */
+#define FAT_MODE_CREATE      0x04  /* Tạo mới */
+#define FAT_MODE_APPEND      0x08  /* Thêm vào cuối */
+#define FAT_MODE_TRUNCATE    0x10  /* Cắt ngắn */
 
-/* Directory Entry definitions */
-#define DIR_NUMBER_OF_BYTES_PER_ENTRY 32U
-#define DIR_NAME_LEN            8U
-#define DIR_EXTENTION_LEN       3U
+/* Error Codes */
+#define FAT_SUCCESS          STATUS_SUCCESS    /* Thành công */
+#define FAT_ERROR           STATUS_ERROR      /* Lỗi chung */
+#define FAT_NO_MEMORY       STATUS_NO_MEMORY  /* Không đủ bộ nhớ */
+#define FAT_INVALID         STATUS_INVALID    /* Tham số không hợp lệ */
+#define FAT_NOT_FOUND       STATUS_NOT_FOUND  /* Không tìm thấy */
+#define FAT_EXISTS          -10               /* Đã tồn tại */
+#define FAT_READ_ONLY       -11               /* Chỉ đọc */
+#define FAT_DISK_FULL       -12               /* Đĩa đầy */
+#define FAT_ROOT_FULL       -13               /* Thư mục gốc đầy */
+#define FAT_EOF             -14               /* Hết tập tin */
+#define FAT_INVALID_NAME    -15               /* Tên không hợp lệ */
+#define FAT_INVALID_PATH    -16               /* Đường dẫn không hợp lệ */
 
-/* File attributes */
-#define FAT_DRIVER_ATTR_READ_ONLY      0x01U
-#define FAT_DRIVER_ATTR_HIDDEN_FILE    0x02U
-#define FAT_DRIVER_ATTR_SYSTEM_FILE    0x04U
-#define FAT_DRIVER_ATTR_VOLUME_LABEL   0x08U
-#define FAT_DRIVER_ATTR_LONG_FILE_NAME 0x0FU
-#define FAT_DRIVER_ATTR_DIRECTORY      0x10U
-#define FAT_DRIVER_ATTR_ARCHIVE_FLAG   0x20U
+/*********************************************************************
+ * Type Definitions  
+ *********************************************************************/
 
-/* Filename definitions for SFN */
-#define FAT_DRIVER_SFN_NAME_PART    DIR_NAME_LEN
-#define FAT_DRIVER_SFN_EXT_LENGTH   DIR_EXTENTION_LEN
-#define FAT_DRIVER_SFN_BUFFER_SIZE  (FAT_DRIVER_SFN_NAME_PART + FAT_DRIVER_SFN_EXT_LENGTH + 2)
-
-/* Special filename markers */
-#define FAT_DRIVER_FILENAME_NEVER_USED   0x00U
-#define FAT_DRIVER_FILENAME_DELETED_1    0xE5U
-#define FAT_DRIVER_FILENAME_DELETED_2    0x05U
-#define FAT_DRIVER_FILENAME_SPECIAL_ENTRY 0x2EU
-
-/* End Of Cluster for FAT12 */
-#define FAT_DRIVER_12_LAST_CLUSTER_START 0xFF8U
-#define FAT_DRIVER_12_LAST_CLUSTER_END   0xFFFU
-#define FAT_DRIVER_12_BAD_CLUSTER        0xFF7U
-#define FAT_DRIVER_12_EOC                FAT_DRIVER_12_LAST_CLUSTER_END
-
-/* Bit Mask of hours, minutes, seconds*/
-#define FAT_DRIVER_BIT_MASK_OF_HOURS 0XF800U
-#define FAT_DRIVER_BIT_MASK_OF_MINUTES 0x7E0U
-#define FAT_DRIVER_BIT_MASK_OF_SECONDS 0x1FU
-
-/* Shift bit mask Hour, Minute, Second */
-#define FAT_DRIVER_SHIFT_HOURS 0xBU
-#define FAT_DRIVER_SHIFT_MINUTES 0x5U
-#define FAT_DRIVER_SHIFT_SECONDS 0x00U
-
-/* Calculate hours, minutes, seconds */
-#define FAT_DRIVER_EXTRACT_HOURS(x) (((FAT_DRIVER_BIT_MASK_OF_HOURS) & (x)) >> (FAT_DRIVER_SHIFT_HOURS))
-#define FAT_DRIVER_EXTRACT_MINUTES(x) (((FAT_DRIVER_BIT_MASK_OF_MINUTES) & (x)) >> (FAT_DRIVER_SHIFT_MINUTES))
-#define FAT_DRIVER_EXTRACT_SECONDS(x) ((FAT_DRIVER_BIT_MASK_OF_SECONDS) & (x) >> (FAT_DRIVER_SHIFT_SECONDS))
-
-/* Bit mask of year, month, day */
-#define FAT_DRIVER_BIT_MASK_OF_YEAR 0xFE00U
-#define FAT_DRIVER_BIT_MASK_OF_MONTH 0x1E0U
-#define FAT_DRIVER_BIT_MASK_OF_DAY 0x1FU
-
-/* Shift bit mask year, month, day */
-#define FAT_DRIVER_SHIFT_YEAR 9U
-#define FAT_DRIVER_SHIFT_MONTH 5U
-#define FAT_DRIVER_SHIFT_DAY 0x00U
-
-#define BIN_YEAR_OFFSET_FROM 1980U
-/* Calculate year, month, day */
-#define FAT_DRIVER_EXTRACT_YEAR(y) (((FAT_DRIVER_BIT_MASK_OF_YEAR) & (y)) >> (FAT_DRIVER_SHIFT_YEAR))
-#define FAT_DRIVER_EXTRACT_MONTH(y) (((FAT_DRIVER_BIT_MASK_OF_MONTH) & (y)) >> (FAT_DRIVER_SHIFT_MONTH))
-#define FAT_DRIVER_EXTRACT_DAY(y) (((FAT_DRIVER_BIT_MASK_OF_DAY) & (y)) >> (FAT_DRIVER_SHIFT_DAY))
-
-/*===============================*
-*         Type Definitions
-*===============================*/
-/* Nếu chưa được định nghĩa, định nghĩa BIN_YEAR_OFFSET_FROM */
-#ifndef BIN_YEAR_OFFSET_FROM
-#define BIN_YEAR_OFFSET_FROM 1980U
-#endif
-
-/* Nếu chưa được định nghĩa, tính số entry trên mỗi sector */
-#ifndef FAT_DRIVER_ENTRYS_OF_SECTOR
-#define FAT_DRIVER_ENTRYS_OF_SECTOR (FAT_DRIVER_BYTES_PER_SECTOR / DIR_NUMBER_OF_BYTES_PER_ENTRY)
-#endif
-
-/*---------------------------------------------------------------------
- *          LOCAL STRUCTURES FOR BOOT SECTOR FORMATS
- *---------------------------------------------------------------------*/
-/* Cấu trúc Boot Sector cho FAT12/16 (định dạng 126 bytes) */
-typedef struct __attribute__((__packed__)) _FATFS_BootFormat126 {
-    uint8_t BS_JmpBoot[3];               /* Jump instruction */
-    uint8_t BS_OEMName[8];               /* OEM Name */
-    uint8_t BPB_BytsPerSec[2];           /* Bytes per sector */
-    uint8_t BPB_SecPerClus[1];           /* Sectors per cluster */
-    uint8_t BPB_RsvdSecCnt[2];           /* Reserved sectors count */
-    uint8_t BPB_NumFATs[1];              /* Number of FATs */
-    uint8_t BPB_RootEntCnt[2];           /* Root entries count */
-    uint8_t BPB_TotSec16[2];             /* Total sectors (16-bit) */
-    uint8_t BPB_Media[1];                /* Media descriptor */
-    uint8_t BPB_FATSz16[2];              /* FAT size (16-bit) */
-    uint8_t BPB_SecPerTrk[2];            /* Sectors per track */
-    uint8_t BPB_NumHeads[2];             /* Number of heads */
-    uint8_t BPB_HiddSec[4];              /* Hidden sectors */
-    uint8_t BPB_TotSec32[4];             /* Total sectors (32-bit) */
-} FATFS_BootFormat126_t;
-
-/* Cấu trúc Boot Sector cho FAT32 */
-typedef struct __attribute__((__packed__)) _FATFS_BootFormat32 {
-    uint8_t BS_JmpBoot[3];               /* Jump instruction */
-    uint8_t BS_OEMName[8];               /* OEM Name */
-    uint8_t BPB_BytsPerSec[2];           /* Bytes per sector */
-    uint8_t BPB_SecPerClus[1];           /* Sectors per cluster */
-    uint8_t BPB_RsvdSecCnt[2];           /* Reserved sectors count */
-    uint8_t BPB_NumFATs[1];              /* Number of FATs */
-    uint8_t BPB_RootEntCnt[2];           /* Root entries count */
-    uint8_t BPB_TotSec16[2];             /* Total sectors (16-bit) */
-    uint8_t BPB_Media[1];                /* Media descriptor */
-    uint8_t BPB_FATSz16[2];              /* FAT size (16-bit); zero for FAT32 */
-    uint8_t BPB_SecPerTrk[2];            /* Sectors per track */
-    uint8_t BPB_NumHeads[2];             /* Number of heads */
-    uint8_t BPB_HiddSec[4];              /* Hidden sectors */
-    uint8_t BPB_TotSec32[4];             /* Total sectors (32-bit) */
-    uint8_t BPB_FATSz32[4];              /* FAT size (32-bit) */
-    /* Các trường khác của FAT32 có thể được thêm nếu cần */
-} FATFS_BootFormat32_t;
-
-/* FAT Boot Data Structure */
+/* FAT Boot Sector */
 typedef struct {
-    uint32_t FirstRootClus;
-    uint32_t FirstDataClus;
-    uint32_t RootDirSector;
-    uint32_t BytePerSec;
-    uint32_t SectorPerClus;
-    uint32_t RsvdSecCnt;
-    uint32_t NumFats;
-    uint32_t RootEntCnt;
-    uint32_t TotSec;
-    uint32_t FatSz;
-    uint32_t DataSec;
-} FATFS_BootData_t;
+    uint8_t  jump_boot[3];        /* Mã nhảy khởi động */
+    uint8_t  oem_name[8];         /* Tên OEM */
+    uint16_t bytes_per_sector;    /* Số byte mỗi sector */
+    uint8_t  sectors_per_cluster; /* Số sector mỗi cluster */
+    uint16_t reserved_sectors;    /* Số sector dự trữ */
+    uint8_t  number_of_fats;      /* Số bảng FAT */
+    uint16_t root_entries;        /* Số entry thư mục gốc */
+    uint16_t total_sectors_16;    /* Tổng số sector (16-bit) */
+    uint8_t  media;               /* Loại thiết bị */
+    uint16_t fat_size_16;         /* Kích thước FAT (FAT12/16) */
+    uint16_t sectors_per_track;   /* Số sector mỗi track */
+    uint16_t number_of_heads;     /* Số đầu đọc */
+    uint32_t hidden_sectors;      /* Số sector ẩn */
+    uint32_t total_sectors_32;    /* Tổng số sector (32-bit) */
+    union {
+        struct {
+            uint8_t  drive_number;      /* Số ổ đĩa */
+            uint8_t  reserved1;         /* Dự trữ */
+            uint8_t  boot_signature;    /* Chữ ký khởi động */
+            uint32_t volume_id;         /* ID ổ đĩa */
+            uint8_t  volume_label[11];  /* Nhãn ổ đĩa */
+            uint8_t  file_system[8];    /* Tên hệ thống tập tin */
+        } fat16;
+        struct {
+            uint32_t fat_size_32;       /* Kích thước FAT (FAT32) */
+            uint16_t ext_flags;         /* Cờ mở rộng */
+            uint16_t fs_version;        /* Phiên bản */
+            uint32_t root_cluster;      /* Cluster thư mục gốc */
+            uint16_t fs_info;          /* Sector thông tin */
+            uint16_t backup_boot;       /* Sector khởi động dự phòng */
+            uint8_t  reserved[12];      /* Dự trữ */
+            uint8_t  drive_number;      /* Số ổ đĩa */
+            uint8_t  reserved1;         /* Dự trữ */
+            uint8_t  boot_signature;    /* Chữ ký khởi động */
+            uint32_t volume_id;         /* ID ổ đĩa */
+            uint8_t  volume_label[11];  /* Nhãn ổ đĩa */
+            uint8_t  file_system[8];    /* Tên hệ thống tập tin */
+        } fat32;
+    } type;
+} fat_boot_sector_t;
 
-/* FAT File Information Structure */
+/* FAT Directory Entry */
 typedef struct {
-    char name[12];
-    uint8_t attributes;
-    uint16_t creationTime;
-    uint16_t creationDate;
-    uint16_t lastAccessDate;
-    uint16_t lastWriteTime;
-    uint16_t lastWriteDate;
-    uint32_t firstCluster;
-    uint32_t fileSize;
-    struct {
-        uint8_t hour;
-        uint8_t minute;
-        uint8_t second;
-        uint8_t day;
-        uint8_t month;
-        uint16_t year;
-    } crtTime, wrtTime;
-} FAT_DRIVER_FileInfo;
+    uint8_t  name[11];           /* Tên tập tin */
+    uint8_t  attributes;         /* Thuộc tính */
+    uint8_t  reserved;           /* Dự trữ */
+    uint8_t  creation_time_ms;   /* Mili giây tạo */
+    uint16_t creation_time;      /* Thời gian tạo */
+    uint16_t creation_date;      /* Ngày tạo */
+    uint16_t last_access_date;   /* Ngày truy cập */
+    uint16_t first_cluster_hi;   /* Cluster đầu (high) */
+    uint16_t last_write_time;    /* Thời gian sửa */
+    uint16_t last_write_date;    /* Ngày sửa */
+    uint16_t first_cluster_lo;   /* Cluster đầu (low) */
+    uint32_t file_size;          /* Kích thước tập tin */
+} fat_dir_entry_t;
 
-/* FAT Filesystem Types */
-typedef enum _FATFS_TYPES {
-    ERROR = -1,
-    FAT12 = 0U,
-    FAT16 = 1U,
-    FAT32 = 2U
-} FATFS_FatTypes_t;
+/* FAT File Info */
+typedef struct {
+    uint8_t  name[256];         /* Tên đầy đủ */
+    uint8_t  attributes;        /* Thuộc tính */
+    uint32_t size;             /* Kích thước */
+    uint32_t cluster;          /* Cluster đầu */
+    uint16_t date;             /* Ngày */
+    uint16_t time;             /* Thời gian */
+} fat_file_info_t;
 
-/* Structure for directory entry format (SFN) */
-typedef struct __attribute__((__packed__)) _ENTRY_FORMAT {
-    uint8_t DIR_Name[DIR_NAME_LEN];
-    uint8_t DIR_Ext[DIR_EXTENTION_LEN];
-    uint8_t DIR_Attr[1];
-    uint8_t DIR_NTRes[1];
-    uint8_t DIR_CrtTimeTenth[1];
-    uint8_t DIR_CrtTime[2];
-    uint8_t DIR_CrtDate[2];
-    uint8_t DIR_LstAccDate[2];
-    uint8_t DIR_FstClusHI[2];
-    uint8_t DIR_WrtTime[2];
-    uint8_t DIR_WrtDate[2];
-    uint8_t DIR_FstClusLO[2];
-    uint8_t DIR_FileSize[4];
-} FATFS_EntryFormat_t;
+/* FAT File Handle */
+typedef struct {
+    fat_file_info_t info;      /* Thông tin tập tin */
+    uint32_t position;         /* Vị trí đọc/ghi */
+    uint32_t cluster;          /* Cluster hiện tại */
+    uint32_t sector;           /* Sector hiện tại */
+    uint32_t offset;           /* Offset trong sector */
+    uint8_t  mode;            /* Chế độ truy cập */
+    bool     modified;        /* Đã sửa đổi */
+} fat_file_t;
 
-/* Storage data for root directory */
-typedef struct fat_driver_data {
-    uint32_t fistCluster;
-    const char *name;
-} FATFS_StorageData_t;
-
-/*===============================*
-*      Function Prototypes
-*===============================*/
+/*********************************************************************
+ * Public Function Prototypes
+ *********************************************************************/
 
 /**
- * @brief Initialize FAT Driver.
- *
- * @param img_path Path to the FAT image file.
- * @param file_list Pointer to the linked list to store directory tree.
- * @return 0 on success, -1 on failure.
+ * @brief Khởi tạo FAT driver
+ * 
+ * @param boot_sector Con trỏ đến boot sector
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_init(const char *img_path, linkedlist_t *file_list, const char *root_path);
+int32_t fat_init(const fat_boot_sector_t *boot_sector);
 
 /**
- * @brief Read boot sector.
- *
- * @return 0 on success, -1 on failure.
+ * @brief Mở tập tin
+ * 
+ * @param path Đường dẫn tập tin
+ * @param mode Chế độ truy cập
+ * @param file Con trỏ đến handle tập tin
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_read_boot_sector(void);
+int32_t fat_open(const char *path, uint8_t mode, fat_file_t *file);
 
 /**
- * @brief List directory contents.
- *
- * @param path Path of the directory to list.
- * @param file_list Linked list to store directory entries.
- * @return 0 on success, -1 on failure.
+ * @brief Đóng tập tin
+ * 
+ * @param file Handle tập tin
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_list_directory(linkedlist_t *file_list);
+int32_t fat_close(fat_file_t *file);
 
 /**
- * @brief Read file.
- *
- * @param filename Full path of the file to read.
- * @param file_list Linked list containing the directory tree.
- * @return 0 on success, -1 on failure.
+ * @brief Đọc dữ liệu từ tập tin
+ * 
+ * @param file Handle tập tin
+ * @param buffer Buffer lưu dữ liệu
+ * @param size Số byte cần đọc
+ * @param bytes_read Con trỏ đến số byte đã đọc
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_read_file(const char *filename, linkedlist_t *file_list);
+int32_t fat_read(fat_file_t *file, void *buffer, uint32_t size, uint32_t *bytes_read);
 
 /**
- * @brief Check if a directory exists.
- *
- * @param path Path of the directory.
- * @return 1 if exists, 0 otherwise.
+ * @brief Ghi dữ liệu vào tập tin
+ * 
+ * @param file Handle tập tin
+ * @param buffer Buffer chứa dữ liệu
+ * @param size Số byte cần ghi
+ * @param bytes_written Con trỏ đến số byte đã ghi
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_directory_exists(const char *path);
+int32_t fat_write(fat_file_t *file, const void *buffer, uint32_t size, uint32_t *bytes_written);
 
 /**
- * @brief Get the next cluster number.
- *
- * @param current_cluster Current cluster number.
- * @return Next cluster number, or -1 on error/end-of-chain.
+ * @brief Di chuyển con trỏ đọc/ghi
+ * 
+ * @param file Handle tập tin
+ * @param offset Offset cần di chuyển
+ * @param origin Vị trí bắt đầu (SEEK_SET, SEEK_CUR, SEEK_END)
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-int fat_driver_get_next_cluster(uint32_t current_cluster);
+int32_t fat_seek(fat_file_t *file, int32_t offset, int32_t origin);
+
+/**
+ * @brief Lấy thông tin tập tin
+ * 
+ * @param path Đường dẫn tập tin
+ * @param info Con trỏ đến thông tin tập tin
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t fat_stat(const char *path, fat_file_info_t *info);
+
+/**
+ * @brief Xóa tập tin
+ * 
+ * @param path Đường dẫn tập tin
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t fat_unlink(const char *path);
+
+/**
+ * @brief Tạo thư mục
+ * 
+ * @param path Đường dẫn thư mục
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t fat_mkdir(const char *path);
+
+/**
+ * @brief Xóa thư mục
+ * 
+ * @param path Đường dẫn thư mục
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t fat_rmdir(const char *path);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* FAT_DRIVER_H */
+#endif /* __FAT_DRIVER_H */
+
+/*********************************************************************
+ * UUID: 2b8c3e2d-1a4f-4e85-9c6d-f8b2e3a1d5c9
+ *********************************************************************/

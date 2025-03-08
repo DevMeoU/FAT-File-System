@@ -1,45 +1,118 @@
-# app/Makefile
-PROJECT_NAME = application
+# Makefile cho FAT File System Project
+# Author: Ducson9112k
 
-CC        = gcc
-CFLAGS    = -Wall -Wextra \
-            -I./src/ip_driver \
-            -I./src/hal \
-            -I./src/fat_driver \
-            -I./src/middleware \
-            -I./src/application \
-            -I./src/utilities/linkedlist \
-            -I./src/utilities/log
+#------------------
+# Tên project
+#------------------
+PROJECT_NAME := application
 
-SRC_DIR   = src
-OBJ_DIR   = obj
-BIN_DIR   = bin
-BUILD_DIR = build
+#------------------
+# Công cụ build
+#------------------
+CC        := gcc
+RM        := rm -rf
+MKDIR     := mkdir -p
 
-SOURCES := $(wildcard $(SRC_DIR)/*/*.c) \
-           $(wildcard $(SRC_DIR)/utilities/linkedlist/*.c)
+#------------------
+# Thư mục
+#------------------
+SRC_DIR   := src
+BUILD_DIR := build
+OBJ_DIR   := $(BUILD_DIR)/obj
+BIN_DIR   := $(BUILD_DIR)/bin
+DEP_DIR   := $(BUILD_DIR)/dep
 
-OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/$(OBJ_DIR)/%.o, $(SOURCES))
+#------------------
+# Các file nguồn
+#------------------
+# Tìm tất cả các file .c trong thư mục src và thư mục con
+SRCS := $(wildcard $(SRC_DIR)/*/*.c) \
+        $(wildcard $(SRC_DIR)/utilities/linkedlist/*.c)
 
-TARGET  := $(BUILD_DIR)/$(BIN_DIR)/$(PROJECT_NAME).exe
+# Tạo danh sách file object tương ứng
+OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-all: $(TARGET)
+# Tạo danh sách file dependency
+DEPS := $(SRCS:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
 
-$(TARGET): $(OBJECTS)
-	@mkdir -p $(BUILD_DIR)/$(BIN_DIR)
-	$(CC) $(OBJECTS) -o $@
+#------------------
+# Cờ biên dịch
+#------------------
+CFLAGS := -Wall -Wextra -Werror \
+          -O2 \
+          -MMD -MP \
+          -I$(SRC_DIR)/ip_driver \
+          -I$(SRC_DIR)/hal \
+          -I$(SRC_DIR)/fat_driver \
+          -I$(SRC_DIR)/middleware \
+          -I$(SRC_DIR)/application \
+          -I$(SRC_DIR)/utilities/linkedlist \
+          -I$(SRC_DIR)/utilities/log \
+          -I$(SRC_DIR)/utilities/status
 
-$(BUILD_DIR)/$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+LDFLAGS := 
 
+#------------------
+# File đích
+#------------------
+TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
+
+#------------------
+# Các target
+#------------------
+.PHONY: all clean run debug release help
+
+# Target mặc định
+all: release
+
+# Build bản release (có tối ưu)
+release: CFLAGS += -O2 -DNDEBUG
+release: $(TARGET)
+	@echo "Build release hoàn thành: $(TARGET)"
+
+# Build bản debug
+debug: CFLAGS += -g -DDEBUG
+debug: $(TARGET) 
+	@echo "Build debug hoàn thành: $(TARGET)"
+
+# Build file thực thi
+$(TARGET): $(OBJS)
+	@echo "Linking $@..."
+	@$(MKDIR) $(dir $@)
+	@$(CC) $(OBJS) $(LDFLAGS) -o $@
+	@echo "Build hoàn thành!"
+
+# Compile các file nguồn
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(MKDIR) $(dir $@)
+	@$(MKDIR) $(dir $(DEP_DIR)/$*.d)
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# Chạy chương trình
 run: $(TARGET)
+	@echo "Đang chạy $(TARGET)..."
 	@./$(TARGET)
 
+# Dọn dẹp
 clean:
-	rm -rf $(BUILD_DIR)/$(OBJ_DIR) $(BUILD_DIR)/$(BIN_DIR)
+	@echo "Đang dọn dẹp..."
+	@$(RM) $(BUILD_DIR)
+	@echo "Đã xóa thư mục build!"
 
+# Hiển thị trợ giúp
+help:
+	@echo "Các target có sẵn:"
+	@echo "  all      - Build bản release (mặc định)"
+	@echo "  debug    - Build bản debug có symbol"
+	@echo "  release  - Build bản release đã tối ưu"
+	@echo "  run      - Chạy chương trình"
+	@echo "  clean    - Xóa các file đã build"
+	@echo "  help     - Hiển thị trợ giúp này"
+
+# In giá trị biến để debug Makefile
 print-%:
 	@echo $* = $($*)
 
-.PHONY: all clean
+# Include các file dependency
+-include $(DEPS)

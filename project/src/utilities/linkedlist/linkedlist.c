@@ -1,169 +1,296 @@
-/*
-* Linked List Module
-* Author: Ducson9112k
-*
-* Description:
-*   Cài đặt các hàm quản lý danh sách liên kết.
-*/
+/*********************************************************************
+ * ✨ Author: Ducson9112k 🌟
+ * 
+ * Description:
+ *   Module Linkedlist cung cấp cấu trúc dữ liệu danh sách liên kết
+ *   và các hàm để thao tác với danh sách.
+ *********************************************************************/
 
-#include "linkedlist.h"
-#include <stdlib.h>
+/*********************************************************************
+ * Include Files
+ *********************************************************************/
+#include <stdio.h>
 #include <string.h>
+#include "linkedlist.h"
 
-/*--------------------------------------------------------------------
-* Linked List Public API Functions
-*--------------------------------------------------------------------*/
+/*********************************************************************
+ * Private Function Prototypes
+ *********************************************************************/
+static node_t *create_node(void *data);
+static void free_node(node_t *node, free_fn free_func);
 
-/*
-* llist_init:
-*   Cấp phát và khởi tạo một danh sách liên kết rỗng.
-*/
-linkedlist_t *llist_init(void) {
-    linkedlist_t *list = (linkedlist_t *)malloc(sizeof(linkedlist_t));
-    if (!list) {
-        return NULL;
+/*********************************************************************
+ * Public Function Implementations
+ *********************************************************************/
+
+int32_t list_init(linkedlist_t *list, bool is_circular)
+{
+    if (list == NULL) {
+        return LIST_INVALID;
     }
+
     list->head = NULL;
     list->tail = NULL;
-    list->count = 0;
-    return list;
+    list->size = 0;
+    list->is_circular = is_circular;
+
+    return LIST_SUCCESS;
 }
 
-/*
-* llist_add:
-*   Thêm một node chứa dữ liệu vào cuối danh sách.
-*/
-int llist_add(linkedlist_t *list, const void *data, size_t data_size) {
-    if (!list || !data || data_size == 0) {
-        return -1;
+int32_t list_push_front(linkedlist_t *list, void *data)
+{
+    if (list == NULL || data == NULL) {
+        return LIST_INVALID;
     }
-    llist_node_t *new_node = (llist_node_t *)malloc(sizeof(llist_node_t));
-    if (!new_node) {
-        return -1;
+
+    node_t *new_node = create_node(data);
+    if (new_node == NULL) {
+        return LIST_NO_MEMORY;
     }
-    new_node->data = malloc(data_size);
-    if (!new_node->data) {
-        free(new_node);
-        return -1;
-    }
-    memcpy(new_node->data, data, data_size);
-    new_node->data_size = data_size;
-    new_node->next = NULL;
-    if (list->tail) {
-        list->tail->next = new_node;
-        list->tail = new_node;
-    } else {
+
+    if (list->head == NULL) {
         list->head = new_node;
         list->tail = new_node;
-    }
-    list->count++;
-    return 0;
-}
-
-/*
-* llist_remove:
-*   Xóa node tại vị trí chỉ định khỏi danh sách.
-*/
-int llist_remove(linkedlist_t *list, size_t index) {
-    if (!list || index >= list->count) {
-        return -1;
-    }
-    llist_node_t *current = list->head;
-    llist_node_t *previous = NULL;
-    size_t i = 0;
-    while (current && i < index) {
-        previous = current;
-        current = current->next;
-        i++;
-    }
-    if (!current) {
-        return -1;
-    }
-    if (previous) {
-        previous->next = current->next;
+        if (list->is_circular) {
+            new_node->next = new_node;
+            new_node->prev = new_node;
+        }
     } else {
-        list->head = current->next;
+        new_node->next = list->head;
+        list->head->prev = new_node;
+        list->head = new_node;
+        if (list->is_circular) {
+            new_node->prev = list->tail;
+            list->tail->next = new_node;
+        }
     }
-    if (current == list->tail) {
-        list->tail = previous;
-    }
-    free(current->data);
-    free(current);
-    list->count--;
-    return 0;
+
+    list->size++;
+    return LIST_SUCCESS;
 }
 
-/*
-* llist_clear:
-*   Xóa toàn bộ các node trong danh sách, giữ nguyên cấu trúc danh sách.
-*/
-void llist_clear(linkedlist_t *list) {
-    if (!list) {
-        return;
+int32_t list_push_back(linkedlist_t *list, void *data)
+{
+    if (list == NULL || data == NULL) {
+        return LIST_INVALID;
     }
-    llist_node_t *current = list->head;
-    while (current) {
-        llist_node_t *temp = current;
+
+    node_t *new_node = create_node(data);
+    if (new_node == NULL) {
+        return LIST_NO_MEMORY;
+    }
+
+    if (list->tail == NULL) {
+        list->head = new_node;
+        list->tail = new_node;
+        if (list->is_circular) {
+            new_node->next = new_node;
+            new_node->prev = new_node;
+        }
+    } else {
+        new_node->prev = list->tail;
+        list->tail->next = new_node;
+        list->tail = new_node;
+        if (list->is_circular) {
+            new_node->next = list->head;
+            list->head->prev = new_node;
+        }
+    }
+
+    list->size++;
+    return LIST_SUCCESS;
+}
+
+int32_t list_pop_front(linkedlist_t *list, free_fn free_func)
+{
+    if (list == NULL || list->head == NULL) {
+        return LIST_INVALID;
+    }
+
+    node_t *node = list->head;
+    
+    if (list->head == list->tail) {
+        list->head = NULL;
+        list->tail = NULL;
+    } else {
+        list->head = node->next;
+        if (list->is_circular) {
+            list->head->prev = list->tail;
+            list->tail->next = list->head;
+        } else {
+            list->head->prev = NULL;
+        }
+    }
+
+    free_node(node, free_func);
+    list->size--;
+
+    return LIST_SUCCESS;
+}
+
+int32_t list_pop_back(linkedlist_t *list, free_fn free_func)
+{
+    if (list == NULL || list->tail == NULL) {
+        return LIST_INVALID;
+    }
+
+    node_t *node = list->tail;
+    
+    if (list->head == list->tail) {
+        list->head = NULL;
+        list->tail = NULL;
+    } else {
+        list->tail = node->prev;
+        if (list->is_circular) {
+            list->tail->next = list->head;
+            list->head->prev = list->tail;
+        } else {
+            list->tail->next = NULL;
+        }
+    }
+
+    free_node(node, free_func);
+    list->size--;
+
+    return LIST_SUCCESS;
+}
+
+int32_t list_insert(linkedlist_t *list, void *data, uint32_t index)
+{
+    if (list == NULL || data == NULL || index > list->size) {
+        return LIST_INVALID;
+    }
+
+    if (index == 0) {
+        return list_push_front(list, data);
+    }
+
+    if (index == list->size) {
+        return list_push_back(list, data);
+    }
+
+    node_t *new_node = create_node(data);
+    if (new_node == NULL) {
+        return LIST_NO_MEMORY;
+    }
+
+    node_t *current = list->head;
+    for (uint32_t i = 0; i < index - 1; i++) {
         current = current->next;
-        free(temp->data);
-        free(temp);
     }
-    list->head = NULL;
-    list->tail = NULL;
-    list->count = 0;
+
+    new_node->next = current->next;
+    new_node->prev = current;
+    current->next->prev = new_node;
+    current->next = new_node;
+
+    list->size++;
+    return LIST_SUCCESS;
 }
 
-/*
-* llist_destroy:
-*   Hủy và giải phóng toàn bộ bộ nhớ của danh sách.
-*/
-void llist_destroy(linkedlist_t *list) {
-    if (!list) {
-        return;
+int32_t list_remove(linkedlist_t *list, uint32_t index, free_fn free_func)
+{
+    if (list == NULL || index >= list->size) {
+        return LIST_INVALID;
     }
-    llist_clear(list);
-    free(list);
+
+    if (index == 0) {
+        return list_pop_front(list, free_func);
+    }
+
+    if (index == list->size - 1) {
+        return list_pop_back(list, free_func);
+    }
+
+    node_t *current = list->head;
+    for (uint32_t i = 0; i < index; i++) {
+        current = current->next;
+    }
+
+    current->prev->next = current->next;
+    current->next->prev = current->prev;
+
+    free_node(current, free_func);
+    list->size--;
+
+    return LIST_SUCCESS;
 }
 
-/*
-* llist_get_first:
-*   Lấy dữ liệu của node đầu tiên trong danh sách.
-*/
-void *llist_get_first(linkedlist_t *list) {
-    if (list && list->head)
-        return list->head->data;
+node_t *list_find(linkedlist_t *list, const void *data, compare_fn compare_func)
+{
+    if (list == NULL || data == NULL || compare_func == NULL) {
+        return NULL;
+    }
+
+    node_t *current = list->head;
+    
+    if (list->is_circular) {
+        do {
+            if (compare_func(current->data, data) == 0) {
+                return current;
+            }
+            current = current->next;
+        } while (current != list->head);
+    } else {
+        while (current != NULL) {
+            if (compare_func(current->data, data) == 0) {
+                return current;
+            }
+            current = current->next;
+        }
+    }
+
     return NULL;
 }
 
-/*--------------------------------------------------------------------
-* Linked List Iterator Functions
-*--------------------------------------------------------------------*/
-
-/*
-* llist_iterator_init:
-*   Khởi tạo iterator cho danh sách liên kết.
-*/
-void llist_iterator_init(linkedlist_t *list, linkedlist_iterator_t *it) {
-    it->current = (list) ? list->head : NULL;
-}
-
-/*
-* llist_iterator_has_next:
-*   Kiểm tra xem iterator còn node nào không.
-*/
-int llist_iterator_has_next(linkedlist_iterator_t *it) {
-    return (it->current != NULL);
-}
-
-/*
-* llist_iterator_next:
-*   Lấy dữ liệu của node tiếp theo từ iterator.
-*/
-void *llist_iterator_next(linkedlist_iterator_t *it) {
-    if (it->current) {
-        void *data = it->current->data;
-        it->current = it->current->next;
-        return data;
+int32_t list_clear(linkedlist_t *list, free_fn free_func)
+{
+    if (list == NULL) {
+        return LIST_INVALID;
     }
-    return NULL;
+
+    while (list->head != NULL) {
+        list_pop_front(list, free_func);
+    }
+
+    return LIST_SUCCESS;
 }
+
+uint32_t list_size(const linkedlist_t *list)
+{
+    return (list != NULL) ? list->size : 0;
+}
+
+bool list_is_empty(const linkedlist_t *list)
+{
+    return (list != NULL) ? (list->size == 0) : true;
+}
+
+/*********************************************************************
+ * Private Function Implementations
+ *********************************************************************/
+
+static node_t *create_node(void *data)
+{
+    node_t *node = (node_t *)malloc(sizeof(node_t));
+    if (node != NULL) {
+        node->data = data;
+        node->next = NULL;
+        node->prev = NULL;
+    }
+    return node;
+}
+
+static void free_node(node_t *node, free_fn free_func)
+{
+    if (node != NULL) {
+        if (free_func != NULL) {
+            free_func(node->data);
+        }
+        free(node);
+    }
+}
+
+/*********************************************************************
+ * UUID: 3a9d2f1b-4c4a-4e85-9c6d-f8b2e3a1d5c9
+ *********************************************************************/

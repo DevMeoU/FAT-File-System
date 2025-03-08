@@ -1,109 +1,193 @@
 /*********************************************************************
  * ✨ Author: Ducson9112k 🌟
+ * 
+ * Description:
+ *   Implementation của IP Driver module, cung cấp các hàm để xử lý
+ *   giao thức IP, bao gồm việc đóng gói, gửi và nhận dữ liệu.
  *********************************************************************/
 
 /*********************************************************************
- * Include
+ * Include Files
  *********************************************************************/
 #include "ip_driver.h"
+#include "ip_driver_private.h"
 
 /*********************************************************************
- * Define
+ * Private Variables
  *********************************************************************/
-#define _FILE_OFFSET_BITS 64 /* Enable 64-bit file offsets */
+static ip_context_t ip_ctx = {0};
 
 /*********************************************************************
- * Function prototypes
+ * Private Function Implementations
  *********************************************************************/
 
-/*********************************************************************
- * Implementations
- *********************************************************************/
-static FILE *file = NULL;
-
-/**
- * @brief Initializes the IP driver by opening the specified image file.
- *
- * This function attempts to open the file located at the provided path
- * in read/write binary mode. If the file is successfully opened, a global
- * file pointer is set for subsequent read/write operations.
- *
- * @param img_path Path to the image file to be opened.
- * @return 0 if the file is successfully opened, -1 if an error occurs.
- */
-
-int ip_driver_init(const char *img_path) {
-    file = fopen(img_path, "r+b");
-    if (!file) {
-        return -1;
+static uint16_t ip_calculate_checksum(const ip_header_t *header) {
+    uint32_t sum = 0;
+    const uint16_t *ptr = (const uint16_t *)header;
+    
+    // Tính tổng các word 16-bit
+    for (int i = 0; i < IP_HEADER_LENGTH/2; i++) {
+        sum += ptr[i];
     }
-    return 0;
-}
-
-/**
- * @brief Reads data from the image file into the provided buffer.
- *
- * This function seeks to the specified offset in the file and reads
- * the specified number of bytes into the buffer. It ensures that the
- * read operation starts from the correct position by using fseek.
- *
- * @param offset The offset in the file from which to start reading.
- * @param buffer The buffer where the read data will be stored.
- * @param size The number of bytes to read from the file.
- * @return 0 if the read operation is successful and the exact number
- *         of bytes is read, -1 if an error occurs or if fewer bytes
- *         are read.
- */
-
-/**
- * @brief Reads data from the image file into the provided buffer.
- *
- * This function seeks to the specified offset in the file and reads
- * the specified number of bytes into the buffer. It ensures that the
- * read operation starts from the correct position by using fseek.
- *
- * @param offset The offset in the file from which to start reading.
- * @param buffer The buffer where the read data will be stored.
- * @param size The number of bytes to read from the file.
- * @return 0 if the read operation is successful and the exact number
- *         of bytes is read, -1 if an error occurs or if fewer bytes
- *         are read.
- */
-int ip_driver_read(unsigned int offset, unsigned char *buffer, size_t size) {
-    fseek(file, offset, SEEK_SET);
-    size_t bytes_read = fread(buffer, 1, size, file);
-    return (bytes_read == size) ? 0 : -1;
-}
-
-/**
- * @brief Writes data from the provided buffer into the image file.
- *
- * This function seeks to the specified offset in the file and writes
- * the specified number of bytes from the buffer. It ensures that the
- * write operation starts from the correct position by using fseek.
- *
- * @param offset The offset in the file from which to start writing.
- * @param buffer The buffer containing the data to write.
- * @param size The number of bytes to write from the buffer.
- * @return 0 if the write operation is successful and the exact number
- *         of bytes is written, -1 if an error occurs or if fewer bytes
- *         are written.
- */
-int ip_driver_write(unsigned int offset, const unsigned char *buffer, size_t size) {
-    fseek(file, offset, SEEK_SET);
-    size_t bytes_written = fwrite(buffer, 1, size, file);
-    return (bytes_written == size) ? 0 : -1;
-}
-
-/**
- * @brief Closes the image file and releases any associated resources.
- *
- * This function simply checks if the file pointer is non-null and
- * closes the file using fclose if it is.
- */
-void ip_driver_close() {
-    if (file) {
-        fclose(file);
+    
+    // Xử lý carry
+    while (sum >> 16) {
+        sum = (sum & 0xFFFF) + (sum >> 16);
     }
+    
+    return (uint16_t)~sum;
 }
+
+static int32_t ip_process_packet(const ip_header_t *header, 
+                               const uint8_t *data, 
+                               uint16_t length) {
+    // Kiểm tra tham số đầu vào
+    if (!header || !data || length < IP_MIN_PACKET_SIZE) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Kiểm tra version
+    if ((header->version_ihl >> 4) != IP_VERSION) {
+        return IP_ERROR;
+    }
+
+    // Kiểm tra checksum
+    if (ip_calculate_checksum(header) != 0) {
+        return IP_ERROR;
+    }
+
+    // Kiểm tra độ dài
+    uint16_t total_length = (header->total_length >> 8) | 
+                           (header->total_length << 8);
+    if (total_length != length) {
+        return IP_ERROR;
+    }
+
+    ip_ctx.rx_count++;
+    return IP_SUCCESS;
+}
+
+static bool ip_is_valid_address(const ip_addr_t *addr) {
+    if (!addr) {
+        return false;
+    }
+
+    // Kiểm tra địa chỉ không hợp lệ
+    if (addr->bytes[0] == 0 && addr->bytes[1] == 0 &&
+        addr->bytes[2] == 0 && addr->bytes[3] == 0) {
+        return false;
+    }
+
+    // Kiểm tra địa chỉ broadcast
+    if (addr->bytes[0] == 255 && addr->bytes[1] == 255 &&
+        addr->bytes[2] == 255 && addr->bytes[3] == 255) {
+        return false;
+    }
+
+    return true;
+}
+
+/*********************************************************************
+ * Public Function Implementations
+ *********************************************************************/
+
+int32_t ip_driver_init(const ip_config_t *config) {
+    // Kiểm tra tham số đầu vào
+    if (!config) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Kiểm tra địa chỉ IP
+    if (!ip_is_valid_address(&config->ip_addr) ||
+        !ip_is_valid_address(&config->netmask) ||
+        !ip_is_valid_address(&config->gateway)) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Khởi tạo context
+    memset(&ip_ctx, 0, sizeof(ip_ctx));
+    memcpy(&ip_ctx.config, config, sizeof(ip_config_t));
+    
+    // Cập nhật trạng thái
+    ip_ctx.state = IP_STATE_INITIALIZED;
+    
+    return IP_SUCCESS;
+}
+
+int32_t ip_driver_send(const ip_packet_t *packet) {
+    // Kiểm tra tham số đầu vào
+    if (!packet || !packet->data || packet->length == 0 ||
+        packet->length > IP_MAX_PACKET_SIZE) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Kiểm tra trạng thái
+    if (ip_ctx.state != IP_STATE_INITIALIZED) {
+        return IP_ERROR;
+    }
+
+    // Chuẩn bị header
+    ip_header_t header = {0};
+    header.version_ihl = (IP_VERSION << 4) | (IP_HEADER_LENGTH / 4);
+    header.total_length = packet->length + IP_HEADER_LENGTH;
+    header.id = ip_ctx.packet_id++;
+    header.ttl = packet->ttl ? packet->ttl : IP_DEFAULT_TTL;
+    header.protocol = packet->protocol;
+    
+    // Copy địa chỉ nguồn và đích
+    memcpy(&header.src_addr, packet->src_addr.bytes, 4);
+    memcpy(&header.dst_addr, packet->dst_addr.bytes, 4);
+    
+    // Tính checksum
+    header.checksum = ip_calculate_checksum(&header);
+
+    // TODO: Implement actual packet transmission
+    ip_ctx.tx_count++;
+    
+    return IP_SUCCESS;
+}
+
+int32_t ip_driver_receive(ip_packet_t *packet, uint32_t timeout_ms) {
+    // Kiểm tra tham số đầu vào
+    if (!packet || timeout_ms == 0) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Kiểm tra trạng thái
+    if (ip_ctx.state != IP_STATE_INITIALIZED) {
+        return IP_ERROR;
+    }
+
+    // TODO: Implement actual packet reception with timeout
+    
+    return IP_TIMEOUT;
+}
+
+int32_t ip_driver_config(const ip_config_t *config) {
+    // Kiểm tra tham số đầu vào
+    if (!config) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Kiểm tra trạng thái
+    if (ip_ctx.state != IP_STATE_INITIALIZED) {
+        return IP_ERROR;
+    }
+
+    // Kiểm tra địa chỉ IP
+    if (!ip_is_valid_address(&config->ip_addr) ||
+        !ip_is_valid_address(&config->netmask) ||
+        !ip_is_valid_address(&config->gateway)) {
+        return IP_INVALID_PARAM;
+    }
+
+    // Cập nhật cấu hình
+    memcpy(&ip_ctx.config, config, sizeof(ip_config_t));
+    
+    return IP_SUCCESS;
+}
+
+/*********************************************************************
+ * End of File
+ *********************************************************************/
 
