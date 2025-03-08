@@ -64,7 +64,7 @@ typedef struct {
 typedef struct {
     uint32_t width;        /* Chiều rộng */
     uint32_t height;       /* Chiều cao */
-} size_t;
+} dimension_t;
 
 /* Point Type */
 typedef struct {
@@ -75,7 +75,7 @@ typedef struct {
 /* Rectangle Type */
 typedef struct {
     point_t position;     /* Vị trí */
-    size_t size;         /* Kích thước */
+    dimension_t size;     /* Kích thước */
 } rect_t;
 
 #ifdef __cplusplus

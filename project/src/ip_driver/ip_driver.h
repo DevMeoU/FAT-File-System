@@ -98,6 +98,24 @@ int32_t ip_driver_receive(ip_packet_t *packet, uint32_t timeout_ms);
  */
 int32_t ip_driver_config(const ip_config_t *config);
 
+/**
+ * @brief Đọc một sector từ thiết bị
+ *
+ * @param sector Số thứ tự sector cần đọc
+ * @param buffer Buffer lưu dữ liệu đọc được
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t ip_read_sector(uint32_t sector, uint8_t *buffer);
+
+/**
+ * @brief Ghi một sector xuống thiết bị
+ *
+ * @param sector Số thứ tự sector cần ghi
+ * @param buffer Buffer chứa dữ liệu cần ghi
+ * @return IP_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t ip_write_sector(uint32_t sector, const uint8_t *buffer);
+
 #ifdef __cplusplus
 }
 #endif

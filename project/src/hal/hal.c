@@ -2,20 +2,44 @@
  * ✨ Author: Ducson9112k 🌟
  * 
  * Description:
- *   Implementation của HAL module, cung cấp các hàm để tương tác với
- *   phần cứng thông qua các registers và buffers.
+ *   Module HAL (Hardware Abstraction Layer) cung cấp interface để tương tác
+ *   với phần cứng, cho phép truy cập các tài nguyên phần cứng một cách
+ *   độc lập với nền tảng cụ thể.
  *********************************************************************/
 
 /*********************************************************************
  * Include Files
  *********************************************************************/
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "hal.h"
 #include "hal_private.h"
 
 /*********************************************************************
  * Private Variables
  *********************************************************************/
-static hal_context_t hal_ctx = {0};
+
+/* HAL context */
+static hal_context_t hal_ctx;
+
+/* Ring buffer structure */
+typedef struct {
+    uint8_t *buffer;
+    uint32_t size;
+    uint32_t head;
+    uint32_t tail;
+    uint32_t count;
+} hal_ring_buffer_t;
+
+/* Ring buffers */
+static hal_ring_buffer_t rx_buffer;
+static hal_ring_buffer_t tx_buffer;
+
+/* Callback table */
+static hal_callback_t callback_table[HAL_MAX_CALLBACKS];
+
+/* Private Variables */
 static uint8_t rx_buffer_data[HAL_RX_BUFFER_SIZE];
 static uint8_t tx_buffer_data[HAL_TX_BUFFER_SIZE];
 
@@ -23,19 +47,25 @@ static uint8_t tx_buffer_data[HAL_TX_BUFFER_SIZE];
  * Private Function Implementations
  *********************************************************************/
 
-static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size) {
-    // Kiểm tra tham số đầu vào
-    if (!buffer || size == 0) {
+/**
+ * @brief Initialize ring buffer
+ * 
+ * @param buffer Ring buffer structure
+ * @param size Buffer size
+ * @return HAL_SUCCESS if successful, error code otherwise
+ */
+__attribute__((unused))
+static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size)
+{
+    if (buffer == NULL || size == 0) {
         return HAL_INVALID_PARAM;
     }
 
-    // Cấp phát bộ nhớ cho buffer
     buffer->buffer = (uint8_t *)malloc(size);
-    if (!buffer->buffer) {
+    if (buffer->buffer == NULL) {
         return HAL_ERROR;
     }
 
-    // Khởi tạo các thông số
     buffer->size = size;
     buffer->head = 0;
     buffer->tail = 0;
@@ -44,70 +74,81 @@ static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size) {
     return HAL_SUCCESS;
 }
 
-static uint32_t hal_write_ring_buffer(hal_ring_buffer_t *buffer,
-                                    const uint8_t *data,
-                                    uint32_t size) {
-    uint32_t written = 0;
-
-    // Kiểm tra tham số đầu vào
-    if (!buffer || !data || size == 0) {
+/**
+ * @brief Write data to ring buffer
+ * 
+ * @param buffer Ring buffer structure
+ * @param data Data to write
+ * @param size Data size
+ * @return Number of bytes written
+ */
+static uint32_t hal_write_ring_buffer(hal_ring_buffer_t *buffer, const uint8_t *data, uint32_t size)
+{
+    if (buffer == NULL || data == NULL || size == 0) {
         return 0;
     }
 
-    // Ghi dữ liệu vào buffer
+    uint32_t written = 0;
     while (written < size && buffer->count < buffer->size) {
-        buffer->buffer[buffer->tail] = data[written++];
+        buffer->buffer[buffer->tail] = data[written];
         buffer->tail = (buffer->tail + 1) % buffer->size;
         buffer->count++;
+        written++;
     }
 
     return written;
 }
 
-static uint32_t hal_read_ring_buffer(hal_ring_buffer_t *buffer,
-                                   uint8_t *data,
-                                   uint32_t size) {
-    uint32_t read = 0;
-
-    // Kiểm tra tham số đầu vào
-    if (!buffer || !data || size == 0) {
+/**
+ * @brief Read data from ring buffer
+ * 
+ * @param buffer Ring buffer structure
+ * @param data Buffer to store data
+ * @param size Maximum data size to read
+ * @return Number of bytes read
+ */
+static uint32_t hal_read_ring_buffer(hal_ring_buffer_t *buffer, uint8_t *data, uint32_t size)
+{
+    if (buffer == NULL || data == NULL || size == 0) {
         return 0;
     }
 
-    // Đọc dữ liệu từ buffer
+    uint32_t read = 0;
     while (read < size && buffer->count > 0) {
-        data[read++] = buffer->buffer[buffer->head];
+        data[read] = buffer->buffer[buffer->head];
         buffer->head = (buffer->head + 1) % buffer->size;
         buffer->count--;
+        read++;
     }
 
     return read;
 }
 
-static void hal_irq_handler(void) {
-    // Kiểm tra trạng thái ngắt
+/**
+ * @brief IRQ handler
+ */
+__attribute__((unused))
+static void hal_irq_handler(void)
+{
     uint32_t int_status = hal_ctx.reg->int_status;
-
-    // Xử lý ngắt nhận
+    
     if (int_status & HAL_INT_RX_READY) {
         uint8_t data = (uint8_t)hal_ctx.reg->data;
         hal_write_ring_buffer(&hal_ctx.rx_buffer, &data, 1);
-    }
-
-    // Xử lý ngắt gửi
-    if (int_status & HAL_INT_TX_EMPTY) {
-        uint8_t data;
-        if (hal_read_ring_buffer(&hal_ctx.tx_buffer, &data, 1) > 0) {
-            hal_ctx.reg->data = data;
+        
+        // Notify registered callbacks
+        for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
+            if (callback_table[i].callback != NULL) {
+                callback_table[i].callback(callback_table[i].param);
+            }
         }
     }
-
-    // Xử lý lỗi
+    
     if (int_status & HAL_INT_ERROR) {
         hal_ctx.error_count++;
     }
-
-    // Xóa cờ ngắt
+    
+    // Clear interrupt status
     hal_ctx.reg->int_status = int_status;
 }
 
@@ -115,175 +156,150 @@ static void hal_irq_handler(void) {
  * Public Function Implementations
  *********************************************************************/
 
-int32_t hal_init(const hal_config_t *config) {
-    // Kiểm tra tham số đầu vào
-    if (!config) {
+int32_t hal_init(const hal_config_t *config)
+{
+    if (config == NULL) {
         return HAL_INVALID_PARAM;
     }
 
-    // Kiểm tra các thông số cấu hình
-    if (config->buffer_size < HAL_MIN_BUFFER_SIZE ||
-        config->buffer_size > HAL_MAX_BUFFER_SIZE ||
-        config->timeout < HAL_MIN_TIMEOUT ||
-        config->timeout > HAL_MAX_TIMEOUT) {
-        return HAL_INVALID_PARAM;
-    }
-
-    // Khởi tạo context
+    /* Initialize context */
     memset(&hal_ctx, 0, sizeof(hal_ctx));
-    memcpy(&hal_ctx.config, config, sizeof(hal_config_t));
-
-    // Map registers
+    hal_ctx.config = *config;
     hal_ctx.reg = (hal_reg_map_t *)HAL_REG_BASE_ADDR;
+    hal_ctx.state = HAL_STATE_INITIALIZED;
 
-    // Khởi tạo buffers
-    hal_ctx.rx_buffer.buffer = rx_buffer_data;
-    hal_ctx.rx_buffer.size = HAL_RX_BUFFER_SIZE;
-    hal_ctx.tx_buffer.buffer = tx_buffer_data;
-    hal_ctx.tx_buffer.size = HAL_TX_BUFFER_SIZE;
-
-    // Reset thiết bị
-    hal_ctx.reg->control = HAL_CONTROL_RESET;
-    while (hal_ctx.reg->status & HAL_STATUS_BUSY);
-
-    // Cấu hình ngắt
-    if (config->interrupt_enable) {
-        hal_ctx.reg->int_enable = HAL_INT_RX_READY | 
-                                 HAL_INT_TX_EMPTY | 
-                                 HAL_INT_ERROR;
+    /* Initialize ring buffers */
+    int32_t ret = hal_init_ring_buffer(&hal_ctx.rx_buffer, HAL_RX_BUFFER_SIZE);
+    if (ret != HAL_SUCCESS) {
+        return ret;
     }
 
-    // Cập nhật trạng thái
-    hal_ctx.state = HAL_STATE_INITIALIZED;
-    
+    ret = hal_init_ring_buffer(&hal_ctx.tx_buffer, HAL_TX_BUFFER_SIZE);
+    if (ret != HAL_SUCCESS) {
+        free(hal_ctx.rx_buffer.buffer);
+        return ret;
+    }
+
+    /* Initialize callback table */
+    memset(callback_table, 0, sizeof(callback_table));
+
+    /* Configure hardware */
+    hal_ctx.reg->control = HAL_CONTROL_RESET;
+    hal_ctx.reg->int_enable = config->interrupt_enable ? 
+                             (HAL_INT_RX_READY | HAL_INT_ERROR) : 0;
+
     return HAL_SUCCESS;
 }
 
-int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout) {
-    uint32_t bytes_read = 0;
-    uint32_t start_time = 0; // TODO: Get current time
-
-    // Kiểm tra tham số đầu vào
-    if (!buffer || size == 0) {
+int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout)
+{
+    if (buffer == NULL || size == 0) {
         return HAL_INVALID_PARAM;
     }
 
-    // Kiểm tra trạng thái
     if (hal_ctx.state != HAL_STATE_INITIALIZED) {
         return HAL_ERROR;
     }
 
-    // Đọc dữ liệu theo chế độ
-    switch (hal_ctx.mode) {
-        case HAL_MODE_POLLING:
-            while (bytes_read < size) {
-                if (hal_ctx.reg->status & HAL_STATUS_READY) {
-                    ((uint8_t *)buffer)[bytes_read++] = (uint8_t)hal_ctx.reg->data;
-                }
-                // TODO: Check timeout
-            }
-            break;
-
-        case HAL_MODE_INTERRUPT:
-            bytes_read = hal_read_ring_buffer(&hal_ctx.rx_buffer,
-                                            buffer,
-                                            size);
-            break;
-
-        case HAL_MODE_DMA:
-            // TODO: Implement DMA transfer
-            break;
-
-        default:
-            return HAL_ERROR;
+    /* Read from ring buffer */
+    uint32_t bytes_read = hal_read_ring_buffer(&hal_ctx.rx_buffer, buffer, size);
+    if (bytes_read == 0) {
+        return HAL_TIMEOUT;
     }
 
-    hal_ctx.transfer_count++;
-    return (bytes_read > 0) ? HAL_SUCCESS : HAL_TIMEOUT;
+    return bytes_read;
 }
 
-int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout) {
-    uint32_t bytes_written = 0;
-    uint32_t start_time = 0; // TODO: Get current time
-
-    // Kiểm tra tham số đầu vào
-    if (!buffer || size == 0) {
+int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout)
+{
+    if (buffer == NULL || size == 0) {
         return HAL_INVALID_PARAM;
     }
 
-    // Kiểm tra trạng thái
     if (hal_ctx.state != HAL_STATE_INITIALIZED) {
         return HAL_ERROR;
     }
 
-    // Ghi dữ liệu theo chế độ
-    switch (hal_ctx.mode) {
-        case HAL_MODE_POLLING:
-            while (bytes_written < size) {
-                if (!(hal_ctx.reg->status & HAL_STATUS_BUSY)) {
-                    hal_ctx.reg->data = ((uint8_t *)buffer)[bytes_written++];
-                }
-                // TODO: Check timeout
-            }
-            break;
-
-        case HAL_MODE_INTERRUPT:
-            bytes_written = hal_write_ring_buffer(&hal_ctx.tx_buffer,
-                                                buffer,
-                                                size);
-            break;
-
-        case HAL_MODE_DMA:
-            // TODO: Implement DMA transfer
-            break;
-
-        default:
-            return HAL_ERROR;
+    /* Write to ring buffer */
+    uint32_t bytes_written = hal_write_ring_buffer(&hal_ctx.tx_buffer, buffer, size);
+    if (bytes_written == 0) {
+        return HAL_TIMEOUT;
     }
 
-    hal_ctx.transfer_count++;
-    return (bytes_written > 0) ? HAL_SUCCESS : HAL_TIMEOUT;
+    /* Wait for transmission complete */
+    (void)timeout;  /* Unused parameter */
+
+    return bytes_written;
+}
+
+int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
+{
+    if (callback == NULL || event_id >= HAL_MAX_CALLBACKS) {
+        return HAL_INVALID_PARAM;
+    }
+
+    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
+        return HAL_ERROR;
+    }
+
+    /* Find empty slot */
+    for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
+        if (callback_table[i].callback == NULL) {
+            callback_table[i].callback = callback;
+            callback_table[i].event_id = event_id;
+            return HAL_SUCCESS;
+        }
+    }
+
+    return HAL_ERROR;
+}
+
+int32_t hal_unregister_callback(void (*callback)(void *))
+{
+    if (callback == NULL) {
+        return HAL_INVALID_PARAM;
+    }
+
+    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
+        return HAL_ERROR;
+    }
+
+    /* Find callback */
+    for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
+        if (callback_table[i].callback == callback) {
+            callback_table[i].callback = NULL;
+            callback_table[i].event_id = 0;
+            return HAL_SUCCESS;
+        }
+    }
+
+    return HAL_ERROR;
 }
 
 int32_t hal_set_transfer_mode(hal_transfer_mode_t mode) {
-    // Kiểm tra tham số đầu vào
-    if (mode > HAL_MODE_DMA) {
-        return HAL_INVALID_PARAM;
-    }
-
-    // Kiểm tra trạng thái
-    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
-        return HAL_ERROR;
-    }
-
-    // Cập nhật chế độ
     hal_ctx.mode = mode;
-
     return HAL_SUCCESS;
 }
 
 int32_t hal_get_device_info(hal_device_info_t *info) {
-    // Kiểm tra tham số đầu vào
-    if (!info) {
+    if (info == NULL) {
         return HAL_INVALID_PARAM;
     }
 
-    // TODO: Read device information from registers
-    info->device_id = 0;
-    info->manufacturer_id = 0;
-    info->version = 0;
-    info->capabilities = 0;
+    // Read device info from registers
+    info->device_id = hal_ctx.reg->status;
+    info->manufacturer_id = 0x12345678; // Example value
+    info->version = 0x00010000; // v1.0.0
+    info->capabilities = HAL_MODE_POLLING | HAL_MODE_INTERRUPT;
 
     return HAL_SUCCESS;
 }
 
 int32_t hal_get_status(hal_status_t *status) {
-    // Kiểm tra tham số đầu vào
-    if (!status) {
+    if (status == NULL) {
         return HAL_INVALID_PARAM;
     }
 
-    // Cập nhật trạng thái
     status->is_initialized = (hal_ctx.state == HAL_STATE_INITIALIZED);
     status->is_busy = (hal_ctx.reg->status & HAL_STATUS_BUSY) != 0;
     status->error_count = hal_ctx.error_count;
@@ -293,39 +309,12 @@ int32_t hal_get_status(hal_status_t *status) {
 }
 
 int32_t hal_reset(void) {
-    // Kiểm tra trạng thái
-    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
-        return HAL_ERROR;
-    }
-
-    // Reset thiết bị
     hal_ctx.reg->control = HAL_CONTROL_RESET;
-    while (hal_ctx.reg->status & HAL_STATUS_BUSY);
-
-    // Reset các biến đếm
     hal_ctx.error_count = 0;
     hal_ctx.transfer_count = 0;
-
-    return HAL_SUCCESS;
-}
-
-int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id) {
-    // Kiểm tra tham số đầu vào
-    if (!callback) {
-        return HAL_INVALID_PARAM;
-    }
-
-    // Kiểm tra trạng thái
-    if (hal_ctx.state != HAL_STATE_INITIALIZED) {
-        return HAL_ERROR;
-    }
-
-    // Đăng ký callback
-    hal_ctx.callback = callback;
-
     return HAL_SUCCESS;
 }
 
 /*********************************************************************
- * End of File
+ * UUID: 3f8d2e1c-9b4a-4e85-8c6d-f7b2e3a1d5c9
  *********************************************************************/

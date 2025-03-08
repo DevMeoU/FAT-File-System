@@ -76,15 +76,14 @@ typedef struct {
     uint32_t first_data_sector; /* Sector dữ liệu đầu tiên */
     uint32_t data_sectors;      /* Số sector dữ liệu */
     uint32_t total_clusters;    /* Tổng số cluster */
+    uint32_t sectors_per_cluster; /* Số sector mỗi cluster */
+    uint32_t reserved_sectors;   /* Số sector dự trữ */
 } fat_config_t;
 
 /* FAT Module Context */
 typedef struct {
     fat_state_t state;          /* Trạng thái module */
     fat_config_t config;        /* Cấu hình */
-    uint8_t *buffer;            /* Buffer đọc/ghi */
-    uint32_t current_sector;    /* Sector hiện tại trong buffer */
-    bool buffer_dirty;          /* Buffer đã thay đổi */
 } fat_context_t;
 
 /* FAT Cache Entry */

@@ -38,6 +38,32 @@ extern "C" {
 #define APP_CMD_MOVE        "mv"      /* Di chuyển file */
 #define APP_CMD_EXIT        "exit"    /* Thoát chương trình */
 
+/* Command Description */
+#define APP_CMD_HELP_DESC        "Hiển thị thông tin trợ giúp"
+#define APP_CMD_LIST_DESC        "Liệt kê nội dung thư mục"
+#define APP_CMD_CHANGE_DIR_DESC  "Thay đổi thư mục hiện tại"
+#define APP_CMD_MAKE_DIR_DESC    "Tạo thư mục mới"
+#define APP_CMD_REMOVE_DIR_DESC  "Xóa thư mục rỗng"
+#define APP_CMD_READ_DESC        "Hiển thị nội dung file"
+#define APP_CMD_WRITE_DESC       "Ghi nội dung vào file"
+#define APP_CMD_DELETE_DESC      "Xóa file"
+#define APP_CMD_COPY_DESC        "Sao chép file"
+#define APP_CMD_MOVE_DESC        "Di chuyển/đổi tên file"
+#define APP_CMD_EXIT_DESC        "Thoát chương trình"
+
+/* Command Usage */
+#define APP_CMD_HELP_USAGE        "help [detail]"
+#define APP_CMD_LIST_USAGE        "ls [path]"
+#define APP_CMD_CHANGE_DIR_USAGE  "cd <path>"
+#define APP_CMD_MAKE_DIR_USAGE    "mkdir <path>"
+#define APP_CMD_REMOVE_DIR_USAGE  "rmdir <path>"
+#define APP_CMD_READ_USAGE        "cat <file>"
+#define APP_CMD_WRITE_USAGE       "write <file> <content>"
+#define APP_CMD_DELETE_USAGE      "rm <file>"
+#define APP_CMD_COPY_USAGE        "cp <src> <dst>"
+#define APP_CMD_MOVE_USAGE        "mv <src> <dst>"
+#define APP_CMD_EXIT_USAGE        "exit"
+
 /* Status Code */
 #define APP_SUCCESS         STATUS_SUCCESS    /* Thành công */
 #define APP_ERROR          STATUS_ERROR      /* Lỗi chung */

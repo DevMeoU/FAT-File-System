@@ -13,8 +13,29 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "application.h"
-#include "print_color.h"
+#include "../middleware/middleware.h"
+#include "../utilities/log/print_color.h"
+#include "../utilities/status/common_type.h"
+
+/*********************************************************************
+ * Private Function Prototypes
+ *********************************************************************/
+
+/* Forward declarations for command handlers */
+static int32_t app_cmd_help_handler(int argc, char *argv[]);
+static int32_t app_cmd_list_handler(int argc, char *argv[]);
+static int32_t app_cmd_cd_handler(int argc, char *argv[]);
+static int32_t app_cmd_mkdir_handler(int argc, char *argv[]);
+static int32_t app_cmd_rmdir_handler(int argc, char *argv[]);
+static int32_t app_cmd_cat_handler(int argc, char *argv[]);
+static int32_t app_cmd_write_handler(int argc, char *argv[]);
+static int32_t app_cmd_rm_handler(int argc, char *argv[]);
+static int32_t app_cmd_cp_handler(int argc, char *argv[]);
+static int32_t app_cmd_mv_handler(int argc, char *argv[]);
+static int32_t app_cmd_exit_handler(int argc, char *argv[]);
 
 /*********************************************************************
  * Private Variables
@@ -33,177 +54,74 @@ static uint8_t app_data_buffer[APP_DATA_BUF_SIZE];
 static const app_cmd_t app_cmd_table[] = {
     {
         .name = APP_CMD_HELP,
-        .desc = "Hiển thị trợ giúp",
-        .usage = "help [command]",
+        .desc = APP_CMD_HELP_DESC,
+        .usage = APP_CMD_HELP_USAGE,
         .handler = app_cmd_help_handler
     },
     {
         .name = APP_CMD_LIST,
-        .desc = "Liệt kê thư mục",
-        .usage = "ls [path]",
+        .desc = APP_CMD_LIST_DESC,
+        .usage = APP_CMD_LIST_USAGE,
         .handler = app_cmd_list_handler
     },
     {
         .name = APP_CMD_CHANGE_DIR,
-        .desc = "Đổi thư mục",
-        .usage = "cd <path>",
+        .desc = APP_CMD_CHANGE_DIR_DESC,
+        .usage = APP_CMD_CHANGE_DIR_USAGE,
         .handler = app_cmd_cd_handler
     },
     {
         .name = APP_CMD_MAKE_DIR,
-        .desc = "Tạo thư mục",
-        .usage = "mkdir <path>",
+        .desc = APP_CMD_MAKE_DIR_DESC,
+        .usage = APP_CMD_MAKE_DIR_USAGE,
         .handler = app_cmd_mkdir_handler
     },
     {
         .name = APP_CMD_REMOVE_DIR,
-        .desc = "Xóa thư mục",
-        .usage = "rmdir <path>",
+        .desc = APP_CMD_REMOVE_DIR_DESC,
+        .usage = APP_CMD_REMOVE_DIR_USAGE,
         .handler = app_cmd_rmdir_handler
     },
     {
         .name = APP_CMD_READ,
-        .desc = "Đọc file",
-        .usage = "cat <file>",
+        .desc = APP_CMD_READ_DESC,
+        .usage = APP_CMD_READ_USAGE,
         .handler = app_cmd_cat_handler
     },
     {
         .name = APP_CMD_WRITE,
-        .desc = "Ghi file",
-        .usage = "write <file> <data>",
+        .desc = APP_CMD_WRITE_DESC,
+        .usage = APP_CMD_WRITE_USAGE,
         .handler = app_cmd_write_handler
     },
     {
         .name = APP_CMD_DELETE,
-        .desc = "Xóa file",
-        .usage = "rm <file>",
+        .desc = APP_CMD_DELETE_DESC,
+        .usage = APP_CMD_DELETE_USAGE,
         .handler = app_cmd_rm_handler
     },
     {
         .name = APP_CMD_COPY,
-        .desc = "Sao chép file",
-        .usage = "cp <src> <dst>",
+        .desc = APP_CMD_COPY_DESC,
+        .usage = APP_CMD_COPY_USAGE,
         .handler = app_cmd_cp_handler
     },
     {
         .name = APP_CMD_MOVE,
-        .desc = "Di chuyển file",
-        .usage = "mv <src> <dst>",
+        .desc = APP_CMD_MOVE_DESC,
+        .usage = APP_CMD_MOVE_USAGE,
         .handler = app_cmd_mv_handler
     },
     {
         .name = APP_CMD_EXIT,
-        .desc = "Thoát chương trình",
-        .usage = "exit",
+        .desc = APP_CMD_EXIT_DESC,
+        .usage = APP_CMD_EXIT_USAGE,
         .handler = app_cmd_exit_handler
     }
 };
 
 /* Running flag */
 static bool app_is_running = false;
-
-/*********************************************************************
- * Private Function Prototypes
- *********************************************************************/
-
-/**
- * @brief Xử lý lệnh help
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_help_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh ls
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_list_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh cd
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_cd_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh mkdir
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_mkdir_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh rmdir
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_rmdir_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh cat
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_cat_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh write
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_write_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh rm
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_rm_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh cp
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_cp_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh mv
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_mv_handler(int argc, char *argv[]);
-
-/**
- * @brief Xử lý lệnh exit
- * 
- * @param argc Số lượng tham số
- * @param argv Mảng tham số
- * @return APP_SUCCESS nếu thành công, mã lỗi nếu thất bại
- */
-static int32_t app_cmd_exit_handler(int argc, char *argv[]);
 
 /*********************************************************************
  * Public Function Implementations
@@ -272,7 +190,7 @@ int32_t app_process_command(const char *cmd_line)
     }
 
     /* Tìm lệnh trong bảng */
-    for (int i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
+    for (size_t i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
         if (strcmp(argv[0], app_cmd_table[i].name) == 0) {
             return app_cmd_table[i].handler(argc, argv);
         }
@@ -287,12 +205,12 @@ int32_t app_show_help(const char *cmd)
     if (cmd == NULL) {
         /* Hiển thị tất cả lệnh */
         log_info("Available commands:");
-        for (int i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
+        for (size_t i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
             printf("  %-10s - %s\n", app_cmd_table[i].name, app_cmd_table[i].desc);
         }
     } else {
         /* Tìm lệnh trong bảng */
-        for (int i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
+        for (size_t i = 0; i < sizeof(app_cmd_table)/sizeof(app_cmd_t); i++) {
             if (strcmp(cmd, app_cmd_table[i].name) == 0) {
                 printf("Usage: %s\n", app_cmd_table[i].usage);
                 printf("Description: %s\n", app_cmd_table[i].desc);
@@ -394,126 +312,99 @@ int32_t app_write_file(const char *path, const void *data, uint32_t size)
  * Private Function Implementations
  *********************************************************************/
 
-static int32_t app_cmd_help_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_help_handler(int argc, char *argv[]) {
     if (argc > 2) {
         log_error("Too many arguments");
         return APP_INVALID_ARG;
     }
-
     return app_show_help((argc == 2) ? argv[1] : NULL);
 }
 
-static int32_t app_cmd_list_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_list_handler(int argc, char *argv[]) {
     if (argc > 2) {
         log_error("Too many arguments");
         return APP_INVALID_ARG;
     }
-
     return app_list_directory((argc == 2) ? argv[1] : NULL);
 }
 
-static int32_t app_cmd_cd_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_cd_handler(int argc, char *argv[]) {
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return app_change_directory(argv[1]);
 }
 
-static int32_t app_cmd_mkdir_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_mkdir_handler(int argc, char *argv[]) {
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return (fat_mkdir(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
 }
 
-static int32_t app_cmd_rmdir_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_rmdir_handler(int argc, char *argv[]) {
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return (fat_rmdir(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
 }
 
-static int32_t app_cmd_cat_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_cat_handler(int argc, char *argv[]) {
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return app_read_file(argv[1]);
 }
 
-static int32_t app_cmd_write_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_write_handler(int argc, char *argv[]) {
     if (argc != 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return app_write_file(argv[1], argv[2], strlen(argv[2]));
 }
 
-static int32_t app_cmd_rm_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_rm_handler(int argc, char *argv[]) {
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
     return (fat_unlink(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
 }
 
-static int32_t app_cmd_cp_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_cp_handler(int argc, char *argv[]) {
     if (argc != 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
-    /* Đọc file nguồn */
     uint32_t bytes_read;
     if (mid_read_file(argv[1], app_data_buffer, sizeof(app_data_buffer), &bytes_read) != MID_SUCCESS) {
         return APP_ERROR;
     }
-
-    /* Ghi file đích */
     return app_write_file(argv[2], app_data_buffer, bytes_read);
 }
 
-static int32_t app_cmd_mv_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_mv_handler(int argc, char *argv[]) {
     if (argc != 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-
-    /* Copy file */
     if (app_cmd_cp_handler(argc, argv) != APP_SUCCESS) {
         return APP_ERROR;
     }
-
-    /* Xóa file nguồn */
     return app_cmd_rm_handler(2, argv);
 }
 
-static int32_t app_cmd_exit_handler(int argc, char *argv[])
-{
+static int32_t app_cmd_exit_handler(int argc, char *argv[]) {
+    (void)argv; /* Unused parameter */
     if (argc != 1) {
         log_error("Too many arguments");
         return APP_INVALID_ARG;
     }
-
     app_is_running = false;
     return APP_SUCCESS;
 }

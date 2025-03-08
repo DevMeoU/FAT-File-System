@@ -46,6 +46,14 @@
 #define HAL_RX_BUFFER_SIZE    256U
 #define HAL_TX_BUFFER_SIZE    256U
 #define HAL_FIFO_SIZE         16U
+#define HAL_MAX_CALLBACKS     8U
+
+/* Callback Structure */
+typedef struct {
+    void (*callback)(void *);  /* Callback function */
+    void *param;               /* Callback parameter */
+    uint32_t event_id;        /* Event ID */
+} hal_callback_t;
 
 /*********************************************************************
  * Private Type Definitions
@@ -77,7 +85,7 @@ typedef struct {
     hal_ring_buffer_t rx_buffer;  /* Buffer nhận */
     hal_ring_buffer_t tx_buffer;  /* Buffer gửi */
     hal_transfer_mode_t mode;     /* Chế độ truyền */
-    void (*callback)(void *);     /* Callback function */
+    hal_callback_t callbacks[HAL_MAX_CALLBACKS]; /* Mảng callbacks */
     uint32_t error_count;         /* Số lỗi */
     uint32_t transfer_count;      /* Số lần truyền */
 } hal_context_t;
