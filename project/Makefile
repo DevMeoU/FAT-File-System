@@ -26,7 +26,7 @@ DEP_DIR   := $(BUILD_DIR)/dep
 # Các file nguồn
 #------------------
 # Tìm tất cả các file .c trong thư mục src và thư mục con
-SRCS := $(wildcard $(SRC_DIR)/*/*.c) \
+SRCS := $(filter-out $(SRC_DIR)/template/%, $(wildcard $(SRC_DIR)/*/*.c)) \
         $(wildcard $(SRC_DIR)/utilities/linkedlist/*.c)
 
 # Tạo danh sách file object tương ứng

@@ -51,16 +51,14 @@ extern "C" {
 /* Error Codes */
 #define FAT_SUCCESS          STATUS_SUCCESS    /* Thành công */
 #define FAT_ERROR           STATUS_ERROR      /* Lỗi chung */
-#define FAT_NO_MEMORY       STATUS_NO_MEMORY  /* Không đủ bộ nhớ */
 #define FAT_INVALID         STATUS_INVALID    /* Tham số không hợp lệ */
 #define FAT_NOT_FOUND       STATUS_NOT_FOUND  /* Không tìm thấy */
-#define FAT_EXISTS          -10               /* Đã tồn tại */
-#define FAT_READ_ONLY       -11               /* Chỉ đọc */
-#define FAT_DISK_FULL       -12               /* Đĩa đầy */
-#define FAT_ROOT_FULL       -13               /* Thư mục gốc đầy */
-#define FAT_EOF             -14               /* Hết tập tin */
-#define FAT_INVALID_NAME    -15               /* Tên không hợp lệ */
-#define FAT_INVALID_PATH    -16               /* Đường dẫn không hợp lệ */
+#define FAT_EXISTS          STATUS_EXISTS     /* Đã tồn tại */
+#define FAT_DISK_FULL       STATUS_DISK_FULL  /* Đĩa đầy */
+#define FAT_READ_ONLY       STATUS_READ_ONLY  /* Chỉ đọc */
+#define FAT_EOF             STATUS_EOF        /* Hết tập tin */
+#define FAT_INVALID_NAME    STATUS_INVALID_NAME /* Tên không hợp lệ */
+#define FAT_ROOT_FULL       STATUS_ROOT_FULL   /* Thư mục gốc đầy */
 
 /*********************************************************************
  * Type Definitions  

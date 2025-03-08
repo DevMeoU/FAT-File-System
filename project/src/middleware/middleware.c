@@ -13,18 +13,7 @@
 #include <string.h>
 #include "middleware.h"
 #include "fat_driver.h"
-#include "linkedlist.h"
 #include "print_color.h"
-
-/*********************************************************************
- * Private Variables
- *********************************************************************/
-
-/* Danh sách đường dẫn (cây thư mục) */
-static linkedlist_t *path_list = NULL;
-
-/* Buffer dữ liệu */
-static uint8_t data_buffer[MID_BUFFER_SIZE];
 
 /*********************************************************************
  * Public Function Implementations
@@ -32,15 +21,8 @@ static uint8_t data_buffer[MID_BUFFER_SIZE];
 
 int32_t mid_init(void)
 {
-    /* Khởi tạo danh sách liên kết */
-    path_list = llist_init();
-    if (path_list == NULL) {
-        log_error("Failed to initialize linked list");
-        return MID_NO_MEMORY;
-    }
-
     /* Khởi tạo FAT driver */
-    fat_boot_sector_t boot_sector;
+    fat_boot_sector_t boot_sector = {0};
     // TODO: Load boot sector
     if (fat_init(&boot_sector) != FAT_SUCCESS) {
         log_error("Failed to initialize FAT driver");
@@ -124,7 +106,7 @@ int32_t mid_write_file(const char *path, const void *buffer, uint32_t size, uint
     return (status == FAT_SUCCESS) ? MID_SUCCESS : MID_ERROR;
 }
 
-int32_t mid_send_data(const void *data, uint32_t size, uint32_t timeout)
+int32_t mid_send_data(const void *data, uint32_t size, uint32_t timeout __attribute__((unused)))
 {
     if (data == NULL) {
         return MID_INVALID;
@@ -132,8 +114,8 @@ int32_t mid_send_data(const void *data, uint32_t size, uint32_t timeout)
 
     /* Tạo gói tin */
     ip_packet_t packet;
-    memcpy(packet.data, data, size);
-    packet.size = size;
+    packet.data = (uint8_t *)data;
+    packet.length = size;
 
     /* Gửi dữ liệu */
     return (ip_driver_send(&packet) == 0) ? MID_SUCCESS : MID_ERROR;
@@ -152,7 +134,7 @@ int32_t mid_receive_data(void *buffer, uint32_t size, uint32_t *bytes_received, 
     }
 
     /* Copy dữ liệu */
-    *bytes_received = (packet.size <= size) ? packet.size : size;
+    *bytes_received = (packet.length <= size) ? packet.length : size;
     memcpy(buffer, packet.data, *bytes_received);
 
     return MID_SUCCESS;

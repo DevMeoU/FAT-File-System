@@ -260,10 +260,19 @@ int32_t app_change_directory(const char *path)
     }
 
     /* Kiểm tra thư mục tồn tại */
-    fat_file_info_t info;
-    if (fat_stat(path, &info) != FAT_SUCCESS) {
+    fat_file_t dir;
+    if (fat_open(path, FAT_MODE_READ, &dir) != FAT_SUCCESS) {
         return APP_NOT_FOUND;
     }
+
+    /* Kiểm tra là thư mục */
+    fat_file_info_t info;
+    if (fat_stat(path, &info) != FAT_SUCCESS || !(info.attributes & FAT_ATTR_DIRECTORY)) {
+        fat_close(&dir);
+        return APP_ERROR;
+    }
+
+    fat_close(&dir);
 
     /* Cập nhật đường dẫn hiện tại */
     strncpy(app_current_dir, path, sizeof(app_current_dir) - 1);
@@ -278,19 +287,28 @@ int32_t app_read_file(const char *path)
         return APP_INVALID;
     }
 
-    /* Đọc file */
+    /* Mở file */
+    fat_file_t file;
+    if (fat_open(path, FAT_MODE_READ, &file) != FAT_SUCCESS) {
+        return APP_NOT_FOUND;
+    }
+
+    /* Đọc và hiển thị nội dung */
     uint32_t bytes_read;
-    if (mid_read_file(path, app_data_buffer, sizeof(app_data_buffer), &bytes_read) != MID_SUCCESS) {
-        return APP_ERROR;
+    uint8_t buffer[APP_DATA_BUF_SIZE];
+    int32_t status = APP_SUCCESS;
+
+    while ((status = fat_read(&file, buffer, sizeof(buffer), &bytes_read)) == FAT_SUCCESS) {
+        if (bytes_read == 0) {
+            break;
+        }
+        fwrite(buffer, 1, bytes_read, stdout);
     }
 
-    /* In nội dung */
-    printf("%.*s", bytes_read, app_data_buffer);
-    if (bytes_read > 0 && app_data_buffer[bytes_read - 1] != '\n') {
-        printf("\n");
-    }
+    fat_close(&file);
+    printf("\n");
 
-    return APP_SUCCESS;
+    return status;
 }
 
 int32_t app_write_file(const char *path, const void *data, uint32_t size)
@@ -299,114 +317,201 @@ int32_t app_write_file(const char *path, const void *data, uint32_t size)
         return APP_INVALID;
     }
 
-    /* Ghi file */
-    uint32_t bytes_written;
-    if (mid_write_file(path, data, size, &bytes_written) != MID_SUCCESS) {
+    /* Mở file */
+    fat_file_t file;
+    if (fat_open(path, FAT_MODE_WRITE | FAT_MODE_CREATE | FAT_MODE_TRUNCATE, &file) != FAT_SUCCESS) {
         return APP_ERROR;
     }
 
-    return APP_SUCCESS;
+    /* Ghi dữ liệu */
+    uint32_t bytes_written;
+    int32_t status = fat_write(&file, data, size, &bytes_written);
+
+    fat_close(&file);
+
+    return (status == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
 }
 
 /*********************************************************************
  * Private Function Implementations
  *********************************************************************/
 
-static int32_t app_cmd_help_handler(int argc, char *argv[]) {
+static int32_t app_cmd_help_handler(int argc, char *argv[])
+{
     if (argc > 2) {
         log_error("Too many arguments");
         return APP_INVALID_ARG;
     }
+
     return app_show_help((argc == 2) ? argv[1] : NULL);
 }
 
-static int32_t app_cmd_list_handler(int argc, char *argv[]) {
+static int32_t app_cmd_list_handler(int argc, char *argv[])
+{
     if (argc > 2) {
         log_error("Too many arguments");
         return APP_INVALID_ARG;
     }
+
     return app_list_directory((argc == 2) ? argv[1] : NULL);
 }
 
-static int32_t app_cmd_cd_handler(int argc, char *argv[]) {
+static int32_t app_cmd_cd_handler(int argc, char *argv[])
+{
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
+
     return app_change_directory(argv[1]);
 }
 
-static int32_t app_cmd_mkdir_handler(int argc, char *argv[]) {
+static int32_t app_cmd_mkdir_handler(int argc, char *argv[])
+{
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    return (fat_mkdir(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
+
+    return fat_mkdir(argv[1]);
 }
 
-static int32_t app_cmd_rmdir_handler(int argc, char *argv[]) {
+static int32_t app_cmd_rmdir_handler(int argc, char *argv[])
+{
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    return (fat_rmdir(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
+
+    return fat_rmdir(argv[1]);
 }
 
-static int32_t app_cmd_cat_handler(int argc, char *argv[]) {
+static int32_t app_cmd_cat_handler(int argc, char *argv[])
+{
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
+
     return app_read_file(argv[1]);
 }
 
-static int32_t app_cmd_write_handler(int argc, char *argv[]) {
-    if (argc != 3) {
+static int32_t app_cmd_write_handler(int argc, char *argv[])
+{
+    if (argc < 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    return app_write_file(argv[1], argv[2], strlen(argv[2]));
+
+    /* Nối các tham số còn lại thành nội dung */
+    char content[APP_DATA_BUF_SIZE] = {0};
+    for (int i = 2; i < argc; i++) {
+        if (i > 2) {
+            strcat(content, " ");
+        }
+        strcat(content, argv[i]);
+    }
+
+    return app_write_file(argv[1], content, strlen(content));
 }
 
-static int32_t app_cmd_rm_handler(int argc, char *argv[]) {
+static int32_t app_cmd_rm_handler(int argc, char *argv[])
+{
     if (argc != 2) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    return (fat_unlink(argv[1]) == FAT_SUCCESS) ? APP_SUCCESS : APP_ERROR;
+
+    return fat_unlink(argv[1]);
 }
 
-static int32_t app_cmd_cp_handler(int argc, char *argv[]) {
+static int32_t app_cmd_cp_handler(int argc, char *argv[])
+{
     if (argc != 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    uint32_t bytes_read;
-    if (mid_read_file(argv[1], app_data_buffer, sizeof(app_data_buffer), &bytes_read) != MID_SUCCESS) {
+
+    /* Đọc file nguồn */
+    fat_file_t src_file;
+    if (fat_open(argv[1], FAT_MODE_READ, &src_file) != FAT_SUCCESS) {
         return APP_ERROR;
     }
-    return app_write_file(argv[2], app_data_buffer, bytes_read);
+
+    /* Tạo file đích */
+    fat_file_t dst_file;
+    if (fat_open(argv[2], FAT_MODE_WRITE | FAT_MODE_CREATE, &dst_file) != FAT_SUCCESS) {
+        fat_close(&src_file);
+        return APP_ERROR;
+    }
+
+    /* Copy dữ liệu */
+    uint32_t bytes_read, bytes_written;
+    uint8_t buffer[APP_DATA_BUF_SIZE];
+    int32_t status = APP_SUCCESS;
+
+    while ((status = fat_read(&src_file, buffer, sizeof(buffer), &bytes_read)) == FAT_SUCCESS) {
+        if (bytes_read == 0) {
+            break;
+        }
+
+        if (fat_write(&dst_file, buffer, bytes_read, &bytes_written) != FAT_SUCCESS) {
+            status = APP_ERROR;
+            break;
+        }
+    }
+
+    fat_close(&src_file);
+    fat_close(&dst_file);
+
+    return status;
 }
 
-static int32_t app_cmd_mv_handler(int argc, char *argv[]) {
+static int32_t app_cmd_mv_handler(int argc, char *argv[])
+{
     if (argc != 3) {
         log_error("Invalid number of arguments");
         return APP_INVALID_ARG;
     }
-    if (app_cmd_cp_handler(argc, argv) != APP_SUCCESS) {
-        return APP_ERROR;
+
+    /* Copy file */
+    int32_t status = app_cmd_cp_handler(argc, argv);
+    if (status != APP_SUCCESS) {
+        return status;
     }
-    return app_cmd_rm_handler(2, argv);
+
+    /* Xóa file nguồn */
+    return fat_unlink(argv[1]);
 }
 
-static int32_t app_cmd_exit_handler(int argc, char *argv[]) {
-    (void)argv; /* Unused parameter */
-    if (argc != 1) {
-        log_error("Too many arguments");
-        return APP_INVALID_ARG;
-    }
+static int32_t app_cmd_exit_handler(int argc, char *argv[])
+{
+    (void)argc;  /* Unused parameter */
+    (void)argv;  /* Unused parameter */
+
     app_is_running = false;
     return APP_SUCCESS;
+}
+
+/*********************************************************************
+ * Main Function
+ *********************************************************************/
+
+int main(void)
+{
+    /* Khởi tạo ứng dụng */
+    if (app_init() != APP_SUCCESS) {
+        log_error("Failed to initialize application");
+        return 1;
+    }
+
+    /* Chạy ứng dụng */
+    if (app_run() != APP_SUCCESS) {
+        log_error("Application error");
+        return 1;
+    }
+
+    return 0;
 }
 
 /*********************************************************************

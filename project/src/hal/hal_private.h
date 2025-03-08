@@ -48,13 +48,6 @@
 #define HAL_FIFO_SIZE         16U
 #define HAL_MAX_CALLBACKS     8U
 
-/* Callback Structure */
-typedef struct {
-    void (*callback)(void *);  /* Callback function */
-    void *param;               /* Callback parameter */
-    uint32_t event_id;        /* Event ID */
-} hal_callback_t;
-
 /*********************************************************************
  * Private Type Definitions
  *********************************************************************/
@@ -76,6 +69,13 @@ typedef struct {
     uint32_t tail;                /* Vị trí cuối */
     uint32_t count;               /* Số phần tử */
 } hal_ring_buffer_t;
+
+/* Callback Structure */
+typedef struct {
+    void (*callback)(void *);     /* Callback function */
+    void *param;                  /* Callback parameter */
+    uint32_t event_id;           /* Event ID */
+} hal_callback_t;
 
 /* HAL Context */
 typedef struct {

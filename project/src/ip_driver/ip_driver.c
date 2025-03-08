@@ -21,26 +21,43 @@ static ip_context_t ip_ctx = {0};
  * Private Function Implementations
  *********************************************************************/
 
-static uint16_t ip_calculate_checksum(const ip_header_t *header) {
+/**
+ * @brief Calculate IP header checksum
+ * 
+ * @param header IP header
+ * @return Checksum value
+ */
+static uint16_t ip_calculate_checksum(const ip_header_t *header)
+{
     uint32_t sum = 0;
-    const uint16_t *ptr = (const uint16_t *)header;
-    
-    // Tính tổng các word 16-bit
-    for (int i = 0; i < IP_HEADER_LENGTH/2; i++) {
-        sum += ptr[i];
+    const uint16_t *data = (const uint16_t *)header;
+
+    /* Calculate sum of 16-bit words */
+    for (uint32_t i = 0; i < IP_HEADER_LENGTH/2; i++) {
+        sum += data[i];
     }
-    
-    // Xử lý carry
+
+    /* Add carry */
     while (sum >> 16) {
         sum = (sum & 0xFFFF) + (sum >> 16);
     }
-    
+
     return (uint16_t)~sum;
 }
 
-static int32_t ip_process_packet(const ip_header_t *header, 
-                               const uint8_t *data, 
-                               uint16_t length) {
+/**
+ * @brief Process received IP packet
+ * 
+ * @param header IP header
+ * @param data Packet data
+ * @param length Data length
+ * @return IP_SUCCESS if successful, error code otherwise
+ */
+__attribute__((unused))
+static int32_t ip_process_packet(const ip_header_t *header,
+                               const uint8_t *data,
+                               uint16_t length)
+{
     // Kiểm tra tham số đầu vào
     if (!header || !data || length < IP_MIN_PACKET_SIZE) {
         return IP_INVALID_PARAM;
@@ -51,19 +68,27 @@ static int32_t ip_process_packet(const ip_header_t *header,
         return IP_ERROR;
     }
 
-    // Kiểm tra checksum
-    if (ip_calculate_checksum(header) != 0) {
+    // Kiểm tra header length
+    if ((header->version_ihl & 0x0F) != IP_HEADER_LENGTH/4) {
         return IP_ERROR;
     }
 
-    // Kiểm tra độ dài
+    // Kiểm tra total length
     uint16_t total_length = (header->total_length >> 8) | 
                            (header->total_length << 8);
     if (total_length != length) {
         return IP_ERROR;
     }
 
-    ip_ctx.rx_count++;
+    // Kiểm tra checksum
+    uint16_t checksum = ip_calculate_checksum(header);
+    if (checksum != 0) {
+        return IP_ERROR;
+    }
+
+    // TODO: Process packet data
+    (void)data;
+
     return IP_SUCCESS;
 }
 

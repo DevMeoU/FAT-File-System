@@ -26,7 +26,7 @@ static void free_node(node_t *node, free_fn free_func);
 int32_t list_init(linkedlist_t *list, bool is_circular)
 {
     if (list == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     list->head = NULL;
@@ -34,18 +34,18 @@ int32_t list_init(linkedlist_t *list, bool is_circular)
     list->size = 0;
     list->is_circular = is_circular;
 
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_push_front(linkedlist_t *list, void *data)
 {
     if (list == NULL || data == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     node_t *new_node = create_node(data);
     if (new_node == NULL) {
-        return LIST_NO_MEMORY;
+        return STATUS_NO_MEMORY;
     }
 
     if (list->head == NULL) {
@@ -66,18 +66,18 @@ int32_t list_push_front(linkedlist_t *list, void *data)
     }
 
     list->size++;
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_push_back(linkedlist_t *list, void *data)
 {
     if (list == NULL || data == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     node_t *new_node = create_node(data);
     if (new_node == NULL) {
-        return LIST_NO_MEMORY;
+        return STATUS_NO_MEMORY;
     }
 
     if (list->tail == NULL) {
@@ -98,13 +98,13 @@ int32_t list_push_back(linkedlist_t *list, void *data)
     }
 
     list->size++;
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_pop_front(linkedlist_t *list, free_fn free_func)
 {
     if (list == NULL || list->head == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     node_t *node = list->head;
@@ -125,13 +125,13 @@ int32_t list_pop_front(linkedlist_t *list, free_fn free_func)
     free_node(node, free_func);
     list->size--;
 
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_pop_back(linkedlist_t *list, free_fn free_func)
 {
     if (list == NULL || list->tail == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     node_t *node = list->tail;
@@ -152,13 +152,13 @@ int32_t list_pop_back(linkedlist_t *list, free_fn free_func)
     free_node(node, free_func);
     list->size--;
 
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_insert(linkedlist_t *list, void *data, uint32_t index)
 {
     if (list == NULL || data == NULL || index > list->size) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     if (index == 0) {
@@ -171,7 +171,7 @@ int32_t list_insert(linkedlist_t *list, void *data, uint32_t index)
 
     node_t *new_node = create_node(data);
     if (new_node == NULL) {
-        return LIST_NO_MEMORY;
+        return STATUS_NO_MEMORY;
     }
 
     node_t *current = list->head;
@@ -185,13 +185,13 @@ int32_t list_insert(linkedlist_t *list, void *data, uint32_t index)
     current->next = new_node;
 
     list->size++;
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t list_remove(linkedlist_t *list, uint32_t index, free_fn free_func)
 {
     if (list == NULL || index >= list->size) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     if (index == 0) {
@@ -213,7 +213,7 @@ int32_t list_remove(linkedlist_t *list, uint32_t index, free_fn free_func)
     free_node(current, free_func);
     list->size--;
 
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 node_t *list_find(linkedlist_t *list, const void *data, compare_fn compare_func)
@@ -246,14 +246,14 @@ node_t *list_find(linkedlist_t *list, const void *data, compare_fn compare_func)
 int32_t list_clear(linkedlist_t *list, free_fn free_func)
 {
     if (list == NULL) {
-        return LIST_INVALID;
+        return STATUS_INVALID;
     }
 
     while (list->head != NULL) {
         list_pop_front(list, free_func);
     }
 
-    return LIST_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 uint32_t list_size(const linkedlist_t *list)
@@ -292,5 +292,5 @@ static void free_node(node_t *node, free_fn free_func)
 }
 
 /*********************************************************************
- * UUID: 3a9d2f1b-4c4a-4e85-9c6d-f8b2e3a1d5c9
+ * UUID: 8b8c3e2d-1a4f-4e85-9c6d-f8b2e3a1d5c9
  *********************************************************************/

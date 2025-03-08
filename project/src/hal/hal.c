@@ -23,26 +23,6 @@
 /* HAL context */
 static hal_context_t hal_ctx;
 
-/* Ring buffer structure */
-typedef struct {
-    uint8_t *buffer;
-    uint32_t size;
-    uint32_t head;
-    uint32_t tail;
-    uint32_t count;
-} hal_ring_buffer_t;
-
-/* Ring buffers */
-static hal_ring_buffer_t rx_buffer;
-static hal_ring_buffer_t tx_buffer;
-
-/* Callback table */
-static hal_callback_t callback_table[HAL_MAX_CALLBACKS];
-
-/* Private Variables */
-static uint8_t rx_buffer_data[HAL_RX_BUFFER_SIZE];
-static uint8_t tx_buffer_data[HAL_TX_BUFFER_SIZE];
-
 /*********************************************************************
  * Private Function Implementations
  *********************************************************************/
@@ -137,9 +117,9 @@ static void hal_irq_handler(void)
         hal_write_ring_buffer(&hal_ctx.rx_buffer, &data, 1);
         
         // Notify registered callbacks
-        for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
-            if (callback_table[i].callback != NULL) {
-                callback_table[i].callback(callback_table[i].param);
+        for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
+            if (hal_ctx.callbacks[i].callback != NULL) {
+                hal_ctx.callbacks[i].callback(hal_ctx.callbacks[i].param);
             }
         }
     }
@@ -180,9 +160,6 @@ int32_t hal_init(const hal_config_t *config)
         return ret;
     }
 
-    /* Initialize callback table */
-    memset(callback_table, 0, sizeof(callback_table));
-
     /* Configure hardware */
     hal_ctx.reg->control = HAL_CONTROL_RESET;
     hal_ctx.reg->int_enable = config->interrupt_enable ? 
@@ -191,7 +168,7 @@ int32_t hal_init(const hal_config_t *config)
     return HAL_SUCCESS;
 }
 
-int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout)
+int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout __attribute__((unused)))
 {
     if (buffer == NULL || size == 0) {
         return HAL_INVALID_PARAM;
@@ -210,7 +187,7 @@ int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout)
     return bytes_read;
 }
 
-int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout)
+int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout __attribute__((unused)))
 {
     if (buffer == NULL || size == 0) {
         return HAL_INVALID_PARAM;
@@ -243,20 +220,20 @@ int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
     }
 
     /* Find empty slot */
-    for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
-        if (callback_table[i].callback == NULL) {
-            callback_table[i].callback = callback;
-            callback_table[i].event_id = event_id;
+    for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
+        if (hal_ctx.callbacks[i].callback == NULL) {
+            hal_ctx.callbacks[i].callback = callback;
+            hal_ctx.callbacks[i].event_id = event_id;
             return HAL_SUCCESS;
         }
     }
 
-    return HAL_ERROR;
+    return HAL_ERROR;  /* No empty slots */
 }
 
-int32_t hal_unregister_callback(void (*callback)(void *))
+int32_t hal_unregister_callback(uint32_t event_id)
 {
-    if (callback == NULL) {
+    if (event_id >= HAL_MAX_CALLBACKS) {
         return HAL_INVALID_PARAM;
     }
 
@@ -264,38 +241,41 @@ int32_t hal_unregister_callback(void (*callback)(void *))
         return HAL_ERROR;
     }
 
-    /* Find callback */
-    for (int i = 0; i < HAL_MAX_CALLBACKS; i++) {
-        if (callback_table[i].callback == callback) {
-            callback_table[i].callback = NULL;
-            callback_table[i].event_id = 0;
+    /* Find and remove callback */
+    for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
+        if (hal_ctx.callbacks[i].event_id == event_id) {
+            hal_ctx.callbacks[i].callback = NULL;
+            hal_ctx.callbacks[i].event_id = 0;
             return HAL_SUCCESS;
         }
     }
 
-    return HAL_ERROR;
+    return HAL_ERROR;  /* Callback not found */
 }
 
-int32_t hal_set_transfer_mode(hal_transfer_mode_t mode) {
+int32_t hal_set_transfer_mode(hal_transfer_mode_t mode)
+{
     hal_ctx.mode = mode;
     return HAL_SUCCESS;
 }
 
-int32_t hal_get_device_info(hal_device_info_t *info) {
+int32_t hal_get_device_info(hal_device_info_t *info)
+{
     if (info == NULL) {
         return HAL_INVALID_PARAM;
     }
 
-    // Read device info from registers
+    /* Read device info from registers */
     info->device_id = hal_ctx.reg->status;
-    info->manufacturer_id = 0x12345678; // Example value
-    info->version = 0x00010000; // v1.0.0
+    info->manufacturer_id = 0x12345678;  /* Example value */
+    info->version = 0x00010000;  /* v1.0.0 */
     info->capabilities = HAL_MODE_POLLING | HAL_MODE_INTERRUPT;
 
     return HAL_SUCCESS;
 }
 
-int32_t hal_get_status(hal_status_t *status) {
+int32_t hal_get_status(hal_status_t *status)
+{
     if (status == NULL) {
         return HAL_INVALID_PARAM;
     }
@@ -308,7 +288,8 @@ int32_t hal_get_status(hal_status_t *status) {
     return HAL_SUCCESS;
 }
 
-int32_t hal_reset(void) {
+int32_t hal_reset(void)
+{
     hal_ctx.reg->control = HAL_CONTROL_RESET;
     hal_ctx.error_count = 0;
     hal_ctx.transfer_count = 0;

@@ -159,6 +159,55 @@ static int32_t fat_convert_to_short_name(const char *name, char *short_name);
  */
 static uint8_t fat_calculate_short_name_checksum(const char *short_name);
 
+/**
+ * @brief Tìm tập tin/thư mục theo đường dẫn
+ * 
+ * @param path Đường dẫn cần tìm
+ * @param entry Con trỏ đến entry tìm được
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+static int32_t fat_find_file(const char *path, fat_dir_entry_t *entry);
+
+/**
+ * @brief Tạo tập tin mới
+ * 
+ * @param path Đường dẫn tập tin
+ * @param entry Con trỏ đến entry được tạo
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+static int32_t fat_create_file(const char *path, fat_dir_entry_t *entry);
+
+/**
+ * @brief Ghi entry vào thư mục
+ * 
+ * @param entry Con trỏ đến entry cần ghi
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+static int32_t fat_write_dir_entry(const fat_dir_entry_t *entry);
+
+/**
+ * @brief Cấp phát cluster mới
+ * 
+ * @return Số hiệu cluster được cấp phát, 0 nếu thất bại
+ */
+static uint32_t fat_alloc_cluster(void);
+
+/**
+ * @brief Giải phóng cluster
+ * 
+ * @param cluster Số hiệu cluster cần giải phóng
+ * @return FAT_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+static int32_t fat_free_cluster(uint32_t cluster);
+
+/**
+ * @brief Tính sector đầu tiên của cluster
+ * 
+ * @param cluster Số hiệu cluster
+ * @return Số hiệu sector đầu tiên
+ */
+static uint32_t get_first_sector(uint32_t cluster);
+
 #ifdef __cplusplus
 }
 #endif
