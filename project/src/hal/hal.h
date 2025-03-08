@@ -19,6 +19,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "../common/storage_driver.h"
 
 /*********************************************************************
  * Macro Definitions
@@ -31,6 +32,11 @@ extern "C" {
 #define HAL_INVALID_PARAM     -3
 #define HAL_BUSY             -4
 #define HAL_NOT_READY        -5
+
+/* Storage Types */
+#define HAL_STORAGE_IP       0x01
+#define HAL_STORAGE_FLASH    0x02
+#define HAL_STORAGE_SD       0x03
 
 /* Buffer sizes */
 #define HAL_MAX_BUFFER_SIZE   1024
@@ -51,6 +57,7 @@ typedef struct {
     uint32_t buffer_size;     /* Kích thước buffer */
     uint32_t timeout;         /* Timeout mặc định (ms) */
     bool interrupt_enable;    /* Cho phép ngắt */
+    uint8_t storage_type;    /* Loại storage đang sử dụng */
 } hal_config_t;
 
 /* Device Information */
@@ -107,6 +114,24 @@ int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout);
  * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
 int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout);
+
+/**
+ * @brief Đọc một sector từ storage
+ *
+ * @param sector Số thứ tự sector
+ * @param buffer Buffer lưu dữ liệu
+ * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t hal_read_sector(uint32_t sector, uint8_t *buffer);
+
+/**
+ * @brief Ghi một sector vào storage
+ *
+ * @param sector Số thứ tự sector
+ * @param buffer Buffer chứa dữ liệu
+ * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+int32_t hal_write_sector(uint32_t sector, const uint8_t *buffer);
 
 /**
  * @brief Cấu hình chế độ truyền

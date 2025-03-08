@@ -12,109 +12,94 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <time.h>
 #include "fat_driver_private.h"
 #include "../ip_driver/ip_driver.h"
 
 /*********************************************************************
  * Private Variables
  *********************************************************************/
-static fat_context_t fat_context;
-static fat_cache_entry_t fat_cache[FAT_CACHE_SIZE];
-static uint8_t cache_data[FAT_CACHE_SIZE][FAT_SECTOR_SIZE];
+fat_context_t fat_context;
+fat_cache_entry_t fat_cache[FAT_CACHE_SIZE] = {0};
 
 /*********************************************************************
  * Private Function Implementations
  *********************************************************************/
 
-static int32_t fat_read_sector(uint32_t sector, uint8_t *buffer)
+int32_t fat_read_sector(uint32_t sector, uint8_t *buffer)
 {
-    /* Check parameters */
     if (buffer == NULL) {
         return FAT_INVALID;
     }
 
-    /* Check cache first */
-    for (int i = 0; i < FAT_CACHE_SIZE; i++) {
+    /* Search in cache */
+    uint32_t min_access = UINT32_MAX;
+    uint32_t min_index = 0;
+    for (uint32_t i = 0; i < FAT_CACHE_SIZE; i++) {
         if (fat_cache[i].sector == sector) {
+            /* Cache hit */
             memcpy(buffer, fat_cache[i].data, FAT_SECTOR_SIZE);
             fat_cache[i].access_count++;
             return FAT_SUCCESS;
         }
+        if (fat_cache[i].access_count < min_access) {
+            min_access = fat_cache[i].access_count;
+            min_index = i;
+        }
     }
 
-    /* Read from device */
+    /* Cache miss - read from device */
     if (ip_read_sector(sector, buffer) != IP_SUCCESS) {
         return FAT_ERROR;
     }
 
-    /* Add to cache */
-    int min_access = fat_cache[0].access_count;
-    int min_index = 0;
-    for (int i = 1; i < FAT_CACHE_SIZE; i++) {
-        if (fat_cache[i].access_count < min_access) {
-            min_access = fat_cache[i].access_count;
-            min_index = i;
-        }
-    }
-
-    /* Write back dirty cache entry */
-    if (fat_cache[min_index].dirty) {
-        if (ip_write_sector(fat_cache[min_index].sector, fat_cache[min_index].data) != IP_SUCCESS) {
-            return FAT_ERROR;
-        }
-    }
-
+    /* Update cache */
     fat_cache[min_index].sector = sector;
     memcpy(fat_cache[min_index].data, buffer, FAT_SECTOR_SIZE);
-    fat_cache[min_index].dirty = false;
     fat_cache[min_index].access_count = 1;
 
     return FAT_SUCCESS;
 }
 
-static int32_t fat_write_sector(uint32_t sector, const uint8_t *buffer)
+int32_t fat_write_sector(uint32_t sector, const uint8_t *buffer)
 {
-    /* Check parameters */
     if (buffer == NULL) {
         return FAT_INVALID;
     }
 
-    /* Update cache if present */
-    for (int i = 0; i < FAT_CACHE_SIZE; i++) {
+    /* Search in cache */
+    uint32_t min_access = UINT32_MAX;
+    uint32_t min_index = 0;
+    for (uint32_t i = 0; i < FAT_CACHE_SIZE; i++) {
         if (fat_cache[i].sector == sector) {
+            /* Cache hit */
             memcpy(fat_cache[i].data, buffer, FAT_SECTOR_SIZE);
-            fat_cache[i].dirty = true;
             fat_cache[i].access_count++;
+            fat_cache[i].dirty = true;
             return FAT_SUCCESS;
         }
-    }
-
-    /* Add to cache */
-    int min_access = fat_cache[0].access_count;
-    int min_index = 0;
-    for (int i = 1; i < FAT_CACHE_SIZE; i++) {
         if (fat_cache[i].access_count < min_access) {
             min_access = fat_cache[i].access_count;
             min_index = i;
         }
     }
 
-    /* Write back dirty cache entry */
-    if (fat_cache[min_index].dirty) {
-        if (ip_write_sector(fat_cache[min_index].sector, fat_cache[min_index].data) != IP_SUCCESS) {
-            return FAT_ERROR;
-        }
+    /* Write to device */
+    if (ip_write_sector(sector, buffer) != IP_SUCCESS) {
+        return FAT_ERROR;
     }
 
+    /* Update cache */
     fat_cache[min_index].sector = sector;
     memcpy(fat_cache[min_index].data, buffer, FAT_SECTOR_SIZE);
-    fat_cache[min_index].dirty = true;
     fat_cache[min_index].access_count = 1;
+    fat_cache[min_index].dirty = false;
 
     return FAT_SUCCESS;
 }
 
-static int32_t fat_read_fat_entry(uint32_t cluster, uint32_t *next_cluster)
+int32_t fat_read_fat_entry(uint32_t cluster, uint32_t *next_cluster)
 {
     /* Check parameters */
     if (next_cluster == NULL || cluster >= fat_context.config.total_clusters) {
@@ -189,7 +174,7 @@ static int32_t fat_read_fat_entry(uint32_t cluster, uint32_t *next_cluster)
     return FAT_SUCCESS;
 }
 
-static int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster)
+int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster)
 {
     /* Check parameters */
     if (cluster >= fat_context.config.total_clusters) {
@@ -286,7 +271,7 @@ static int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster)
     return FAT_SUCCESS;
 }
 
-static int32_t fat_find_free_cluster(uint32_t *cluster)
+int32_t fat_find_free_cluster(uint32_t *cluster)
 {
     /* Check parameters */
     if (cluster == NULL) {
@@ -312,25 +297,23 @@ static int32_t fat_find_free_cluster(uint32_t *cluster)
     return FAT_DISK_FULL;
 }
 
-static int32_t fat_convert_to_short_name(const char *name, char *short_name)
+int32_t fat_convert_to_short_name(const char *name, char *short_name)
 {
-    /* Check parameters */
     if (name == NULL || short_name == NULL) {
         return FAT_INVALID;
     }
 
-    /* Clear short name buffer */
-    memset(short_name, ' ', 11);
-
     /* Find extension */
     const char *ext = strrchr(name, '.');
-    size_t name_len = (ext != NULL) ? (ext - name) : strlen(name);
-    size_t ext_len = (ext != NULL) ? strlen(ext + 1) : 0;
+    size_t name_len = (ext != NULL) ? (size_t)(ext - name) : strlen(name);
 
-    /* Check lengths */
-    if (name_len > FAT_DIR_NAME_LEN || ext_len > FAT_DIR_EXT_LEN) {
+    /* Check name length */
+    if (name_len > FAT_DIR_NAME_LEN) {
         return FAT_INVALID_NAME;
     }
+
+    /* Clear short name buffer */
+    memset(short_name, ' ', 11);
 
     /* Copy name */
     for (size_t i = 0; i < name_len && i < FAT_DIR_NAME_LEN; i++) {
@@ -339,7 +322,7 @@ static int32_t fat_convert_to_short_name(const char *name, char *short_name)
 
     /* Copy extension */
     if (ext != NULL) {
-        for (size_t i = 0; i < ext_len && i < FAT_DIR_EXT_LEN; i++) {
+        for (size_t i = 0; i < strlen(ext + 1) && i < FAT_DIR_EXT_LEN; i++) {
             short_name[FAT_DIR_NAME_LEN + i] = toupper(ext[i + 1]);
         }
     }
@@ -347,7 +330,7 @@ static int32_t fat_convert_to_short_name(const char *name, char *short_name)
     return FAT_SUCCESS;
 }
 
-static uint8_t fat_calculate_short_name_checksum(const char *short_name)
+uint8_t fat_calculate_short_name_checksum(const char *short_name)
 {
     uint8_t sum = 0;
     for (int i = 0; i < 11; i++) {
@@ -356,253 +339,297 @@ static uint8_t fat_calculate_short_name_checksum(const char *short_name)
     return sum;
 }
 
-static int32_t fat_find_file(const char *path, fat_dir_entry_t *entry)
+int32_t fat_find_file(const char *path, fat_dir_entry_t *entry)
 {
-    if (path == NULL || entry == NULL) {
-        return FAT_INVALID;
+    if (!path || !entry) {
+        return FAT_ERROR_INVALID_PARAMETER;
     }
 
-    /* Parse path components */
-    char component[256];
-    const char *p = path;
-    uint32_t cluster = fat_context.config.root_dir_sectors;
+    char *path_copy = strdup(path);
+    if (!path_copy) {
+        return FAT_ERROR_NO_MEMORY;
+    }
 
-    while (*p) {
-        /* Get next component */
-        char *c = component;
-        while (*p && *p != '/') {
-            *c++ = *p++;
-        }
-        *c = '\0';
-        if (*p == '/') p++;
+    // Bắt đầu từ thư mục gốc
+    uint32_t current_sector = fat_context.config.reserved_sectors;
+    uint32_t current_cluster = 0;
+    uint32_t sector_offset = 0;
+    fat_dir_entry_t dir_entry[FAT_DIR_ENTRY_SIZE];
 
-        /* Skip empty components */
-        if (component[0] == '\0') {
-            continue;
-        }
-
-        /* Convert to short name */
-        char short_name[11];
-        if (fat_convert_to_short_name(component, short_name) != FAT_SUCCESS) {
-            return FAT_INVALID_NAME;
-        }
-
-        /* Search in current directory */
-        uint32_t sector = get_first_sector(cluster);
-        uint32_t sector_count = fat_context.config.sectors_per_cluster;
+    char *token = strtok(path_copy, "/");
+    while (token) {
         bool found = false;
-
-        for (uint32_t i = 0; i < sector_count && !found; i++) {
-            uint8_t sector_buffer[FAT_SECTOR_SIZE];
-            if (fat_read_sector(sector + i, sector_buffer) != FAT_SUCCESS) {
-                return FAT_ERROR;
+        
+        // Đọc các entry trong thư mục hiện tại
+        while (sector_offset < fat_context.config.root_dir_sectors) {
+            if (fat_read_sector(current_sector + sector_offset, (uint8_t *)dir_entry) != FAT_SUCCESS) {
+                free(path_copy);
+                return FAT_ERROR_READ_FAILED;
             }
 
-            fat_dir_entry_t *dir = (fat_dir_entry_t *)sector_buffer;
-            for (int j = 0; j < FAT_SECTOR_SIZE/sizeof(fat_dir_entry_t); j++) {
-                if (dir[j].name[0] == FAT_DIR_EMPTY) {
-                    break;  /* End of directory */
+            // Tìm entry phù hợp
+            for (int j = 0; j < FAT_DIR_ENTRY_SIZE; j++) {
+                if (dir_entry[j].name[0] == FAT_DIR_EMPTY) {
+                    break;
                 }
-                if (dir[j].name[0] == FAT_DIR_DELETED) {
+                if (dir_entry[j].name[0] == FAT_DIR_DELETED) {
                     continue;
                 }
-                if (memcmp(dir[j].name, short_name, 11) == 0) {
-                    memcpy(entry, &dir[j], sizeof(fat_dir_entry_t));
+
+                char name[FAT_DIR_NAME_LEN + 1];
+                fat_get_name(&dir_entry[j], name);
+
+                if (strcmp(name, token) == 0) {
+                    memcpy(entry, &dir_entry[j], sizeof(fat_dir_entry_t));
                     found = true;
+                    
+                    // Cập nhật vị trí cho thư mục tiếp theo
+                    current_cluster = ((uint32_t)entry->first_cluster_hi << 16) | entry->first_cluster_lo;
+                    if (current_cluster != 0) {
+                        current_sector = fat_cluster_to_sector(current_cluster);
+                        sector_offset = 0;
+                    }
                     break;
                 }
             }
+
+            if (found) {
+                break;
+            }
+            sector_offset++;
         }
 
         if (!found) {
-            return FAT_NOT_FOUND;
+            free(path_copy);
+            return FAT_ERROR_NOT_FOUND;
         }
 
-        /* Move to next directory */
-        if (*p) {
-            if (!(entry->attributes & FAT_ATTR_DIRECTORY)) {
-                return FAT_INVALID_PATH;
-            }
-            cluster = (entry->first_cluster_hi << 16) | entry->first_cluster_lo;
-        }
+        token = strtok(NULL, "/");
     }
 
+    free(path_copy);
     return FAT_SUCCESS;
 }
 
-static int32_t fat_create_file(const char *path, fat_dir_entry_t *entry)
+int32_t fat_create_file(const char *path, fat_dir_entry_t *entry)
 {
-    if (path == NULL || entry == NULL) {
-        return FAT_INVALID;
+    if (!path || !entry) {
+        return FAT_ERROR_INVALID_PARAMETER;
     }
 
-    /* Get parent directory path */
-    char parent_path[256];
-    const char *name = strrchr(path, '/');
-    if (name == NULL) {
-        parent_path[0] = '\0';
-        name = path;
+    // Tìm thư mục cha
+    char *path_copy = strdup(path);
+    char *last_slash = strrchr(path_copy, '/');
+    char *parent_path = NULL;
+    char *file_name = NULL;
+
+    if (last_slash) {
+        *last_slash = '\0';
+        parent_path = path_copy;
+        file_name = last_slash + 1;
     } else {
-        size_t len = name - path;
-        strncpy(parent_path, path, len);
-        parent_path[len] = '\0';
-        name++;
+        parent_path = ".";
+        file_name = path_copy;
     }
 
-    /* Find parent directory */
     fat_dir_entry_t parent_entry;
-    int32_t status;
-    uint32_t parent_cluster;
-
-    if (parent_path[0] == '\0') {
-        parent_cluster = fat_context.config.root_dir_sectors;
-    } else {
-        status = fat_find_file(parent_path, &parent_entry);
-        if (status != FAT_SUCCESS) {
-            return status;
-        }
-        if (!(parent_entry.attributes & FAT_ATTR_DIRECTORY)) {
-            return FAT_INVALID_PATH;
-        }
-        parent_cluster = (parent_entry.first_cluster_hi << 16) | parent_entry.first_cluster_lo;
+    int32_t result = fat_find_file(parent_path, &parent_entry);
+    if (result != FAT_SUCCESS) {
+        free(path_copy);
+        return result;
     }
 
-    /* Convert name to short format */
-    char short_name[11];
-    if (fat_convert_to_short_name(name, short_name) != FAT_SUCCESS) {
-        return FAT_INVALID_NAME;
-    }
+    // Tìm entry trống trong thư mục cha
+    uint32_t parent_cluster = ((uint32_t)parent_entry.first_cluster_hi << 16) | parent_entry.first_cluster_lo;
+    uint32_t current_sector = fat_cluster_to_sector(parent_cluster);
+    fat_dir_entry_t dir_entry[FAT_DIR_ENTRY_SIZE];
 
-    /* Find free entry in parent directory */
-    uint32_t sector = get_first_sector(parent_cluster);
-    uint32_t sector_count = fat_context.config.sectors_per_cluster;
-    bool found = false;
-
-    for (uint32_t i = 0; i < sector_count && !found; i++) {
-        uint8_t sector_buffer[FAT_SECTOR_SIZE];
-        if (fat_read_sector(sector + i, sector_buffer) != FAT_SUCCESS) {
-            return FAT_ERROR;
+    while (1) {
+        if (fat_read_sector(current_sector, (uint8_t *)dir_entry) != FAT_SUCCESS) {
+            free(path_copy);
+            return FAT_ERROR_READ_FAILED;
         }
 
-        fat_dir_entry_t *dir = (fat_dir_entry_t *)sector_buffer;
-        for (int j = 0; j < FAT_SECTOR_SIZE/sizeof(fat_dir_entry_t); j++) {
-            if (dir[j].name[0] == FAT_DIR_EMPTY || 
-                dir[j].name[0] == FAT_DIR_DELETED) {
-                /* Initialize new entry */
-                memset(&dir[j], 0, sizeof(fat_dir_entry_t));
-                memcpy(dir[j].name, short_name, 11);
-                dir[j].attributes = 0;
-                dir[j].creation_time = 0;  /* TODO: Set current time */
-                dir[j].creation_date = 0;  /* TODO: Set current date */
-                dir[j].last_access_date = 0;
-                dir[j].last_write_time = 0;
-                dir[j].last_write_date = 0;
-                dir[j].first_cluster_hi = 0;
-                dir[j].first_cluster_lo = 0;
-                dir[j].file_size = 0;
+        // Tìm entry trống
+        for (int i = 0; i < FAT_DIR_ENTRY_SIZE; i++) {
+            if (dir_entry[i].name[0] == FAT_DIR_EMPTY || 
+                dir_entry[i].name[0] == FAT_DIR_DELETED) {
+                
+                // Khởi tạo entry mới
+                memset(&dir_entry[i], 0, sizeof(fat_dir_entry_t));
+                strncpy((char *)dir_entry[i].name, file_name, FAT_DIR_NAME_LEN);
+                dir_entry[i].attributes = FAT_ATTR_ARCHIVE;
+                dir_entry[i].creation_time = fat_get_time();
+                dir_entry[i].creation_date = fat_get_date();
+                dir_entry[i].last_access_date = dir_entry[i].creation_date;
+                dir_entry[i].last_write_time = dir_entry[i].creation_time;
+                dir_entry[i].last_write_date = dir_entry[i].creation_date;
 
-                /* Write sector back */
-                if (fat_write_sector(sector + i, sector_buffer) != FAT_SUCCESS) {
-                    return FAT_ERROR;
+                // Cấp phát cluster đầu tiên
+                uint32_t first_cluster;
+                if (fat_find_free_cluster(&first_cluster) != FAT_SUCCESS) {
+                    free(path_copy);
+                    return FAT_ERROR_NO_SPACE;
                 }
 
-                /* Return entry */
-                memcpy(entry, &dir[j], sizeof(fat_dir_entry_t));
-                found = true;
-                break;
-            }
-        }
-    }
-
-    if (!found) {
-        return FAT_ROOT_FULL;
-    }
-
-    return FAT_SUCCESS;
-}
-
-static int32_t fat_write_dir_entry(const fat_dir_entry_t *entry)
-{
-    if (entry == NULL) {
-        return FAT_INVALID;
-    }
-
-    /* Find entry in directory */
-    uint32_t cluster = fat_context.config.root_dir_sectors;
-    uint32_t sector = get_first_sector(cluster);
-    uint32_t sector_count = fat_context.config.sectors_per_cluster;
-    bool found = false;
-
-    for (uint32_t i = 0; i < sector_count && !found; i++) {
-        uint8_t sector_buffer[FAT_SECTOR_SIZE];
-        if (fat_read_sector(sector + i, sector_buffer) != FAT_SUCCESS) {
-            return FAT_ERROR;
-        }
-
-        fat_dir_entry_t *dir = (fat_dir_entry_t *)sector_buffer;
-        for (int j = 0; j < FAT_SECTOR_SIZE/sizeof(fat_dir_entry_t); j++) {
-            if (dir[j].name[0] == FAT_DIR_EMPTY) {
-                break;  /* End of directory */
-            }
-            if (memcmp(dir[j].name, entry->name, 11) == 0) {
-                /* Update entry */
-                memcpy(&dir[j], entry, sizeof(fat_dir_entry_t));
-
-                /* Write sector back */
-                if (fat_write_sector(sector + i, sector_buffer) != FAT_SUCCESS) {
-                    return FAT_ERROR;
+                dir_entry[i].first_cluster_hi = (uint16_t)(first_cluster >> 16);
+                dir_entry[i].first_cluster_lo = (uint16_t)(first_cluster & 0xFFFF);
+                if (fat_write_fat_entry(first_cluster, FAT_EOC(fat_context.config.fat_type)) != FAT_SUCCESS) {
+                    free(path_copy);
+                    return FAT_ERROR_WRITE_FAILED;
                 }
 
-                found = true;
-                break;
+                // Ghi entry vào sector
+                if (fat_write_sector(current_sector, (uint8_t *)dir_entry) != FAT_SUCCESS) {
+                    free(path_copy);
+                    return FAT_ERROR_WRITE_FAILED;
+                }
+
+                memcpy(entry, &dir_entry[i], sizeof(fat_dir_entry_t));
+                free(path_copy);
+                return FAT_SUCCESS;
             }
         }
-    }
 
-    if (!found) {
-        return FAT_NOT_FOUND;
-    }
+        // Chuyển sang sector tiếp theo
+        uint32_t next_cluster;
+        if (fat_read_fat_entry(parent_cluster, &next_cluster) != FAT_SUCCESS) {
+            free(path_copy);
+            return FAT_ERROR_READ_FAILED;
+        }
 
-    return FAT_SUCCESS;
+        if (next_cluster >= FAT_EOC(fat_context.config.fat_type)) {
+            // Cấp phát cluster mới cho thư mục
+            uint32_t new_cluster;
+            if (fat_find_free_cluster(&new_cluster) != FAT_SUCCESS) {
+                free(path_copy);
+                return FAT_ERROR_NO_SPACE;
+            }
+
+            if (fat_write_fat_entry(parent_cluster, new_cluster) != FAT_SUCCESS ||
+                fat_write_fat_entry(new_cluster, FAT_EOC(fat_context.config.fat_type)) != FAT_SUCCESS) {
+                free(path_copy);
+                return FAT_ERROR_WRITE_FAILED;
+            }
+
+            parent_cluster = new_cluster;
+        } else {
+            parent_cluster = next_cluster;
+        }
+
+        current_sector = fat_cluster_to_sector(parent_cluster);
+    }
 }
 
-static uint32_t fat_alloc_cluster(void)
+int32_t fat_write_dir_entry(const fat_dir_entry_t *entry)
 {
+    if (!entry) {
+        return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Tìm vị trí entry trong thư mục
+    uint32_t current_sector = fat_context.config.reserved_sectors;
+    uint32_t sector_offset = 0;
+    fat_dir_entry_t dir_entry[FAT_DIR_ENTRY_SIZE];
+
+    while (sector_offset < fat_context.config.root_dir_sectors) {
+        if (fat_read_sector(current_sector + sector_offset, (uint8_t *)dir_entry) != FAT_SUCCESS) {
+            return FAT_ERROR_READ_FAILED;
+        }
+
+        for (int i = 0; i < FAT_DIR_ENTRY_SIZE; i++) {
+            if (memcmp(&dir_entry[i], entry, sizeof(fat_dir_entry_t)) == 0) {
+                // Cập nhật entry
+                memcpy(&dir_entry[i], entry, sizeof(fat_dir_entry_t));
+                
+                // Ghi lại sector
+                if (fat_write_sector(current_sector + sector_offset, (uint8_t *)dir_entry) != FAT_SUCCESS) {
+                    return FAT_ERROR_WRITE_FAILED;
+                }
+                
+                return FAT_SUCCESS;
+            }
+        }
+
+        sector_offset++;
+    }
+
+    return FAT_ERROR_NOT_FOUND;
+}
+
+uint32_t fat_alloc_cluster(void) {
     uint32_t cluster;
     if (fat_find_free_cluster(&cluster) != FAT_SUCCESS) {
         return 0;
     }
-
-    /* Mark cluster as end of chain */
-    uint32_t eoc;
-    switch (fat_context.config.fat_type) {
-        case FAT_TYPE_12:
-            eoc = FAT12_EOC;
-            break;
-        case FAT_TYPE_16:
-            eoc = FAT16_EOC;
-            break;
-        case FAT_TYPE_32:
-            eoc = FAT32_EOC;
-            break;
-        default:
-            return 0;
-    }
-
-    if (fat_write_fat_entry(cluster, eoc) != FAT_SUCCESS) {
+    
+    if (fat_write_fat_entry(cluster, FAT_EOC(fat_context.config.fat_type)) != FAT_SUCCESS) {
         return 0;
     }
-
+    
     return cluster;
 }
 
-static int32_t fat_free_cluster(uint32_t cluster)
-{
+int32_t fat_free_cluster(uint32_t cluster) {
     if (cluster < 2 || cluster >= fat_context.config.total_clusters) {
-        return FAT_INVALID;
+        return FAT_ERROR_INVALID_PARAMETER;
     }
 
-    return fat_write_fat_entry(cluster, FAT_FREE_CLUSTER);
+    uint32_t current_cluster = cluster;
+    uint32_t next_cluster;
+
+    do {
+        if (fat_read_fat_entry(current_cluster, &next_cluster) != FAT_SUCCESS) {
+            return FAT_ERROR_READ_FAILED;
+        }
+
+        if (fat_write_fat_entry(current_cluster, FAT_FREE_CLUSTER) != FAT_SUCCESS) {
+            return FAT_ERROR_WRITE_FAILED;
+        }
+
+        current_cluster = next_cluster;
+    } while (current_cluster != FAT_EOC(fat_context.config.fat_type));
+
+    return FAT_SUCCESS;
+}
+
+/* Định nghĩa FAT_EOC dựa trên loại FAT */
+#define FAT_EOC(type) ((type) == FAT_TYPE_FAT12 ? FAT12_EOC : \
+                       (type) == FAT_TYPE_FAT16 ? FAT16_EOC : \
+                       FAT32_EOC)
+
+/**
+ * @brief Lấy tên file từ entry
+ */
+void fat_get_name(const fat_dir_entry_t *entry, char *name) {
+    memcpy(name, entry->name, FAT_DIR_NAME_LEN);
+    name[FAT_DIR_NAME_LEN] = '\0';
+}
+
+/**
+ * @brief Chuyển cluster thành sector
+ */
+uint32_t fat_cluster_to_sector(uint32_t cluster) {
+    return fat_context.config.first_data_sector + 
+           ((cluster - 2) * fat_context.config.sectors_per_cluster);
+}
+
+/**
+ * @brief Lấy thời gian hiện tại
+ */
+uint16_t fat_get_time(void) {
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    return (tm->tm_hour << 11) | (tm->tm_min << 5) | (tm->tm_sec >> 1);
+}
+
+/**
+ * @brief Lấy ngày hiện tại
+ */
+uint16_t fat_get_date(void) {
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    return ((tm->tm_year - 80) << 9) | ((tm->tm_mon + 1) << 5) | tm->tm_mday;
 }
 
 /*********************************************************************

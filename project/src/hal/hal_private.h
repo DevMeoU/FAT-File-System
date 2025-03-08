@@ -2,92 +2,116 @@
  * ✨ Author: Ducson9112k 🌟
  * 
  * Description:
- *   Định nghĩa private cho HAL module.
- *   KHÔNG sử dụng trực tiếp các định nghĩa này từ bên ngoài module.
+ *   Private header cho HAL Storage module, định nghĩa các cấu trúc và
+ *   hàm nội bộ chỉ sử dụng trong module. KHÔNG export các định nghĩa
+ *   này ra bên ngoài module.
  *********************************************************************/
-#ifndef __HAL_PRIVATE_H
-#define __HAL_PRIVATE_H
+#ifndef __HAL_STORAGE_PRIVATE_H
+#define __HAL_STORAGE_PRIVATE_H
 
-#include "hal.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "hal_storage.h"
 
 /*********************************************************************
- * Private Macro Definitions
+ * Macro Definitions
  *********************************************************************/
 
-/* Module States */
-#define HAL_STATE_UNINITIALIZED  0U
-#define HAL_STATE_INITIALIZED    1U
-#define HAL_STATE_RUNNING       2U
-#define HAL_STATE_ERROR         3U
+/* Module states */
+#define HAL_STATE_UNINITIALIZED   0
+#define HAL_STATE_INITIALIZED     1
+#define HAL_STATE_ERROR          2
 
-/* Debug Configuration */
-#define HAL_DEBUG_MODE          0U
+/* Debug configurations */
+#define HAL_DEBUG_ENABLED        1
+#define HAL_DEBUG_LEVEL          2
 
-/* Hardware Constants */
-#define HAL_REG_BASE_ADDR      0x40000000U
-#define HAL_REG_STATUS         0x00U
-#define HAL_REG_CONTROL        0x04U
-#define HAL_REG_DATA           0x08U
-#define HAL_REG_INT_ENABLE     0x0CU
-#define HAL_REG_INT_STATUS     0x10U
+/* Buffer configurations */
+#define HAL_RX_BUFFER_SIZE       2048
+#define HAL_TX_BUFFER_SIZE       2048
+#define HAL_CACHE_SIZE          16
 
-/* Register Bits */
-#define HAL_STATUS_BUSY        (1U << 0)
-#define HAL_STATUS_ERROR       (1U << 1)
-#define HAL_STATUS_READY       (1U << 2)
-#define HAL_CONTROL_START      (1U << 0)
-#define HAL_CONTROL_STOP       (1U << 1)
-#define HAL_CONTROL_RESET      (1U << 2)
-#define HAL_INT_RX_READY       (1U << 0)
-#define HAL_INT_TX_EMPTY       (1U << 1)
-#define HAL_INT_ERROR          (1U << 2)
+/* Hardware configurations */
+#define HAL_REG_BASE_ADDR       0x40000000
+#define HAL_INT_RX_READY        0x01
+#define HAL_INT_TX_READY        0x02
+#define HAL_INT_ERROR           0x04
 
-/* Buffer Management */
-#define HAL_RX_BUFFER_SIZE    256U
-#define HAL_TX_BUFFER_SIZE    256U
-#define HAL_FIFO_SIZE         16U
-#define HAL_MAX_CALLBACKS     8U
+/* Control register bits */
+#define HAL_CONTROL_RESET       0x01
+#define HAL_CONTROL_ENABLE      0x02
+#define HAL_CONTROL_DMA         0x04
+
+/* Status register bits */
+#define HAL_STATUS_BUSY         0x01
+#define HAL_STATUS_ERROR        0x02
+#define HAL_STATUS_READY        0x04
+
+/* Maximum number of callbacks */
+#define HAL_MAX_CALLBACKS       8
 
 /*********************************************************************
- * Private Type Definitions
+ * Type Definitions
  *********************************************************************/
 
-/* Register Map */
+/* Ring buffer structure */
 typedef struct {
-    volatile uint32_t status;      /* Trạng thái */
-    volatile uint32_t control;     /* Điều khiển */
-    volatile uint32_t data;        /* Dữ liệu */
-    volatile uint32_t int_enable;  /* Cho phép ngắt */
-    volatile uint32_t int_status;  /* Trạng thái ngắt */
-} hal_reg_map_t;
-
-/* Ring Buffer */
-typedef struct {
-    uint8_t *buffer;              /* Con trỏ buffer */
-    uint32_t size;                /* Kích thước buffer */
-    uint32_t head;                /* Vị trí đầu */
-    uint32_t tail;                /* Vị trí cuối */
-    uint32_t count;               /* Số phần tử */
+    uint8_t *buffer;    /* Buffer pointer */
+    uint32_t size;      /* Buffer size */
+    uint32_t head;      /* Read index */
+    uint32_t tail;      /* Write index */
+    uint32_t count;     /* Number of bytes */
 } hal_ring_buffer_t;
 
-/* Callback Structure */
+/* Callback structure */
 typedef struct {
-    void (*callback)(void *);     /* Callback function */
-    void *param;                  /* Callback parameter */
-    uint32_t event_id;           /* Event ID */
+    callback_t callback;  /* Callback function */
+    void *param;         /* Callback parameter */
+    uint32_t event_id;   /* Event identifier */
 } hal_callback_t;
 
-/* HAL Context */
+/* Hardware register map */
 typedef struct {
-    uint8_t state;                /* Trạng thái module */
-    hal_config_t config;          /* Cấu hình */
-    hal_reg_map_t *reg;          /* Con trỏ đến registers */
-    hal_ring_buffer_t rx_buffer;  /* Buffer nhận */
-    hal_ring_buffer_t tx_buffer;  /* Buffer gửi */
-    hal_transfer_mode_t mode;     /* Chế độ truyền */
-    hal_callback_t callbacks[HAL_MAX_CALLBACKS]; /* Mảng callbacks */
-    uint32_t error_count;         /* Số lỗi */
-    uint32_t transfer_count;      /* Số lần truyền */
+    volatile uint32_t control;      /* Control register */
+    volatile uint32_t status;       /* Status register */
+    volatile uint32_t int_enable;   /* Interrupt enable */
+    volatile uint32_t int_status;   /* Interrupt status */
+    volatile uint32_t data;         /* Data register */
+    volatile uint32_t dma_addr;     /* DMA address */
+    volatile uint32_t dma_count;    /* DMA count */
+    volatile uint32_t reserved[9];  /* Reserved */
+} hal_reg_map_t;
+
+/* HAL context structure */
+typedef struct {
+    uint8_t state;                  /* Module state */
+    hal_config_t config;            /* Configuration */
+    hal_reg_map_t *reg;            /* Register map */
+    hal_ring_buffer_t rx_buffer;    /* Receive buffer */
+    hal_ring_buffer_t tx_buffer;    /* Transmit buffer */
+    hal_callback_t callbacks[HAL_MAX_CALLBACKS]; /* Callbacks */
+    uint32_t error_count;           /* Error counter */
+    uint32_t transfer_count;        /* Transfer counter */
+    
+    /* Storage management */
+    storage_driver_t *current_storage;  /* Current storage driver */
+    uint32_t sector_size;              /* Current sector size */
+    uint32_t sector_count;             /* Current sector count */
+    
+    /* Cache management */
+    struct {
+        uint32_t sector;                /* Sector number */
+        uint8_t data[STORAGE_MAX_SECTOR_SIZE]; /* Sector data */
+        bool valid;                     /* Cache valid */
+        bool dirty;                     /* Cache modified */
+    } cache;
+    
+    /* DMA management */
+    void *dma_buffer;                  /* DMA buffer */
+    uint32_t dma_size;                 /* DMA buffer size */
+    bool dma_busy;                     /* DMA busy flag */
 } hal_context_t;
 
 /*********************************************************************
@@ -96,31 +120,31 @@ typedef struct {
 
 /**
  * @brief Khởi tạo ring buffer
- *
- * @param buffer Con trỏ đến ring buffer
- * @param size Kích thước buffer
+ * 
+ * @param buffer Ring buffer structure
+ * @param size Buffer size
  * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
 static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size);
 
 /**
  * @brief Ghi dữ liệu vào ring buffer
- *
- * @param buffer Con trỏ đến ring buffer
- * @param data Con trỏ đến dữ liệu
- * @param size Số byte cần ghi
+ * 
+ * @param buffer Ring buffer structure
+ * @param data Data to write
+ * @param size Data size
  * @return Số byte đã ghi
  */
-static uint32_t hal_write_ring_buffer(hal_ring_buffer_t *buffer, 
-                                    const uint8_t *data, 
+static uint32_t hal_write_ring_buffer(hal_ring_buffer_t *buffer,
+                                    const uint8_t *data,
                                     uint32_t size);
 
 /**
  * @brief Đọc dữ liệu từ ring buffer
- *
- * @param buffer Con trỏ đến ring buffer
- * @param data Con trỏ đến buffer lưu dữ liệu
- * @param size Số byte cần đọc
+ * 
+ * @param buffer Ring buffer structure
+ * @param data Buffer to store data
+ * @param size Maximum size to read
  * @return Số byte đã đọc
  */
 static uint32_t hal_read_ring_buffer(hal_ring_buffer_t *buffer,
@@ -132,4 +156,20 @@ static uint32_t hal_read_ring_buffer(hal_ring_buffer_t *buffer,
  */
 static void hal_irq_handler(void);
 
-#endif /* __HAL_PRIVATE_H */ 
+/**
+ * @brief Quản lý cache
+ * 
+ * @param sector Sector number
+ * @param data Data buffer
+ * @param write true if write operation
+ * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
+ */
+static int32_t hal_cache_manage(uint32_t sector,
+                              uint8_t *data,
+                              bool write);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __HAL_STORAGE_PRIVATE_H */ 

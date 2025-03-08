@@ -16,7 +16,7 @@
 #include "../common/common_type.h"
 #include "fat_driver.h"
 #include "fat_driver_private.h"
-#include "../ip_driver/ip_driver.h"
+#include "../hal/hal.h"
 
 /*********************************************************************
  * Private Variables
@@ -27,48 +27,67 @@ static uint32_t root_dir_sectors;
 static uint32_t first_data_sector;
 static uint32_t data_sectors;
 static uint32_t total_clusters;
+static fat_context_t fat_ctx;
 
 /*********************************************************************
  * Private Function Prototypes
  *********************************************************************/
-static uint32_t get_first_sector(uint32_t cluster);
-static uint32_t get_next_cluster(uint32_t current_cluster);
-static int32_t read_sector(uint32_t sector, uint8_t *buffer);
-static int32_t write_sector(uint32_t sector, const uint8_t *buffer);
+uint32_t get_first_sector(uint32_t cluster);
+uint32_t get_next_cluster(uint32_t current_cluster);
+int32_t read_sector(uint32_t sector, uint8_t *buffer);
+int32_t write_sector(uint32_t sector, const uint8_t *buffer);
+int32_t fat_read_sector(uint32_t sector, uint8_t *buffer);
+int32_t fat_write_sector(uint32_t sector, const uint8_t *buffer);
+int32_t fat_read_fat_entry(uint32_t cluster, uint32_t *next_cluster);
+int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster);
 
 /*********************************************************************
  * Public Function Implementations
  *********************************************************************/
 
-int32_t fat_init(const fat_boot_sector_t *bs)
+int32_t fat_init(const fat_config_t *config)
 {
-    if (bs == NULL) {
-        return FAT_INVALID;
+    if (!config) {
+        return FAT_ERROR_INVALID_PARAMETER;
     }
 
-    /* Copy boot sector */
-    memcpy(&boot_sector, bs, sizeof(fat_boot_sector_t));
-
-    /* Calculate file system parameters */
-    uint32_t root_dir_bytes = boot_sector.root_entries * sizeof(fat_dir_entry_t);
-    root_dir_sectors = (root_dir_bytes + (boot_sector.bytes_per_sector - 1)) / boot_sector.bytes_per_sector;
-
-    uint32_t fat_size = (boot_sector.fat_size_16 != 0) ? boot_sector.fat_size_16 : boot_sector.type.fat32.fat_size_32;
-    uint32_t total_sectors = (boot_sector.total_sectors_16 != 0) ? boot_sector.total_sectors_16 : boot_sector.total_sectors_32;
-
-    first_data_sector = boot_sector.reserved_sectors + (boot_sector.number_of_fats * fat_size) + root_dir_sectors;
-    data_sectors = total_sectors - first_data_sector;
-    total_clusters = data_sectors / boot_sector.sectors_per_cluster;
-
-    /* Determine FAT type */
-    if (total_clusters < 4085) {
-        fat_type = FAT_TYPE_12;
-    } else if (total_clusters < 65525) {
-        fat_type = FAT_TYPE_16;
-    } else {
-        fat_type = FAT_TYPE_32;
+    // Khởi tạo HAL
+    hal_config_t hal_config = {
+        .storage_type = HAL_STORAGE_IP,  // Sử dụng IP storage
+        .buffer_size = FAT_BUFFER_SIZE,
+        .timeout = HAL_DEFAULT_TIMEOUT,
+        .interrupt_enable = false
+    };
+    
+    int32_t ret = hal_init(&hal_config);
+    if (ret != HAL_SUCCESS) {
+        return FAT_ERROR;
     }
 
+    // Khởi tạo context
+    memset(&fat_ctx, 0, sizeof(fat_ctx));
+    memcpy(&fat_ctx.config, config, sizeof(fat_config_t));
+
+    // Đọc boot sector
+    ret = fat_read_sector(0, (uint8_t *)&fat_ctx.boot);
+    if (ret != FAT_SUCCESS) {
+        return ret;
+    }
+
+    // Kiểm tra chữ ký boot sector
+    if (fat_ctx.boot.signature != FAT_SIGNATURE_AA55) {
+        return FAT_ERROR;
+    }
+
+    // Tính các thông số FAT
+    fat_ctx.fat_start = fat_ctx.boot.reserved_sectors;
+    fat_ctx.root_start = fat_ctx.fat_start + 
+                        (fat_ctx.boot.fats * fat_ctx.boot.sectors_per_fat);
+    fat_ctx.data_start = fat_ctx.root_start + 
+                        ((fat_ctx.boot.root_entries * 32 + 
+                          (FAT_SECTOR_SIZE - 1)) / FAT_SECTOR_SIZE);
+
+    fat_ctx.mounted = true;
     return FAT_SUCCESS;
 }
 
@@ -312,7 +331,7 @@ int32_t fat_seek(fat_file_t *file, int32_t offset, int32_t origin)
     }
 
     /* Check bounds */
-    if (new_pos < 0) {
+    if (new_pos < 0 || (uint32_t)new_pos > file->info.size) {
         return FAT_INVALID;
     }
 
@@ -329,7 +348,7 @@ int32_t fat_seek(fat_file_t *file, int32_t offset, int32_t origin)
         uint32_t pos = 0;
         uint32_t bytes_per_cluster = boot_sector.sectors_per_cluster * boot_sector.bytes_per_sector;
 
-        while (pos + bytes_per_cluster <= new_pos) {
+        while (pos + bytes_per_cluster <= (uint32_t)new_pos) {
             cluster = get_next_cluster(cluster);
             if (cluster == 0) {
                 return FAT_INVALID;
@@ -420,7 +439,7 @@ int32_t fat_mkdir(const char *path)
 
     /* Create directory entry */
     memset(&entry, 0, sizeof(entry));
-    strncpy((char *)entry.name, path, 11);
+    memcpy(entry.name, path, sizeof(entry.name));
     entry.attributes = FAT_ATTR_DIRECTORY;
     
     /* Allocate first cluster */
@@ -494,7 +513,7 @@ int32_t fat_rmdir(const char *path)
     }
 
     fat_dir_entry_t *dir = (fat_dir_entry_t *)sector_buffer;
-    for (int i = 2; i < FAT_SECTOR_SIZE/sizeof(fat_dir_entry_t); i++) {
+    for (uint32_t i = 2; i < FAT_SECTOR_SIZE/sizeof(fat_dir_entry_t); i++) {
         if (dir[i].name[0] != 0 && dir[i].name[0] != 0xE5) {
             return FAT_ERROR;  /* Directory not empty */
         }
@@ -521,12 +540,12 @@ int32_t fat_rmdir(const char *path)
  * Private Function Implementations
  *********************************************************************/
 
-static uint32_t get_first_sector(uint32_t cluster)
+uint32_t get_first_sector(uint32_t cluster)
 {
     return ((cluster - 2) * boot_sector.sectors_per_cluster) + first_data_sector;
 }
 
-static uint32_t get_next_cluster(uint32_t current_cluster)
+uint32_t get_next_cluster(uint32_t current_cluster)
 {
     uint32_t fat_offset;
     uint32_t fat_sector;
@@ -596,14 +615,226 @@ static uint32_t get_next_cluster(uint32_t current_cluster)
     return next_cluster;
 }
 
-static int32_t read_sector(uint32_t sector, uint8_t *buffer)
+int32_t read_sector(uint32_t sector, uint8_t *buffer)
 {
     return (ip_read_sector(sector, buffer) == IP_SUCCESS) ? FAT_SUCCESS : FAT_ERROR;
 }
 
-static int32_t write_sector(uint32_t sector, const uint8_t *buffer)
+int32_t write_sector(uint32_t sector, const uint8_t *buffer)
 {
     return (ip_write_sector(sector, buffer) == IP_SUCCESS) ? FAT_SUCCESS : FAT_ERROR;
+}
+
+int32_t fat_read_sector(uint32_t sector, uint8_t *buffer)
+{
+    if (!buffer) {
+        return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    #if FAT_ENABLE_CACHE
+    // Kiểm tra cache
+    for (int i = 0; i < FAT_CACHE_SIZE; i++) {
+        if (fat_ctx.cache[i].valid && fat_ctx.cache[i].sector == sector) {
+            memcpy(buffer, fat_ctx.cache[i].data, FAT_SECTOR_SIZE);
+            return FAT_SUCCESS;
+        }
+    }
+    #endif
+
+    // Đọc từ thiết bị thông qua HAL
+    int32_t ret = hal_read_sector(sector, buffer);
+    if (ret != HAL_SUCCESS) {
+        return FAT_ERROR_READ_FAILED;
+    }
+
+    #if FAT_ENABLE_CACHE
+    // Cập nhật cache
+    uint32_t cache_index = sector % FAT_CACHE_SIZE;
+    fat_ctx.cache[cache_index].sector = sector;
+    memcpy(fat_ctx.cache[cache_index].data, buffer, FAT_SECTOR_SIZE);
+    fat_ctx.cache[cache_index].valid = true;
+    fat_ctx.cache[cache_index].dirty = false;
+    #endif
+
+    return FAT_SUCCESS;
+}
+
+int32_t fat_write_sector(uint32_t sector, const uint8_t *buffer)
+{
+    if (!buffer) {
+        return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Ghi xuống thiết bị thông qua HAL
+    int32_t ret = hal_write_sector(sector, buffer);
+    if (ret != HAL_SUCCESS) {
+        return FAT_ERROR_WRITE_FAILED;
+    }
+
+    #if FAT_ENABLE_CACHE
+    // Cập nhật cache
+    uint32_t cache_index = sector % FAT_CACHE_SIZE;
+    fat_ctx.cache[cache_index].sector = sector;
+    memcpy(fat_ctx.cache[cache_index].data, buffer, FAT_SECTOR_SIZE);
+    fat_ctx.cache[cache_index].valid = true;
+    fat_ctx.cache[cache_index].dirty = false;
+    #endif
+
+    return FAT_SUCCESS;
+}
+
+int32_t fat_read_fat_entry(uint32_t cluster, uint32_t *next_cluster)
+{
+    if (!next_cluster) {
+        return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Tính vị trí entry trong FAT
+    uint32_t fat_offset;
+    uint32_t fat_sector;
+    uint32_t ent_offset;
+    
+    switch (fat_ctx.config.fat_type) {
+        case FAT_TYPE_12:
+            fat_offset = cluster + (cluster / 2);
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        case FAT_TYPE_16:
+            fat_offset = cluster * 2;
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        case FAT_TYPE_32:
+            fat_offset = cluster * 4;
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        default:
+            return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Đọc sector chứa entry
+    uint8_t sector_buffer[FAT_SECTOR_SIZE];
+    int32_t ret = fat_read_sector(fat_sector, sector_buffer);
+    if (ret != FAT_SUCCESS) {
+        return ret;
+    }
+
+    // Đọc giá trị entry
+    uint32_t entry_value;
+    
+    switch (fat_ctx.config.fat_type) {
+        case FAT_TYPE_12:
+            if (cluster & 0x1) {
+                entry_value = (sector_buffer[ent_offset] >> 4) |
+                            (sector_buffer[ent_offset + 1] << 4);
+            } else {
+                entry_value = sector_buffer[ent_offset] |
+                            ((sector_buffer[ent_offset + 1] & 0x0F) << 8);
+            }
+            entry_value &= FAT12_MASK;
+            break;
+            
+        case FAT_TYPE_16:
+            entry_value = sector_buffer[ent_offset] |
+                         (sector_buffer[ent_offset + 1] << 8);
+            entry_value &= FAT16_MASK;
+            break;
+            
+        case FAT_TYPE_32:
+            entry_value = sector_buffer[ent_offset] |
+                         (sector_buffer[ent_offset + 1] << 8) |
+                         (sector_buffer[ent_offset + 2] << 16) |
+                         (sector_buffer[ent_offset + 3] << 24);
+            entry_value &= FAT32_MASK;
+            break;
+            
+        default:
+            return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    *next_cluster = entry_value;
+    return FAT_SUCCESS;
+}
+
+int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster)
+{
+    // Tính vị trí entry trong FAT
+    uint32_t fat_offset;
+    uint32_t fat_sector;
+    uint32_t ent_offset;
+    
+    switch (fat_ctx.config.fat_type) {
+        case FAT_TYPE_12:
+            fat_offset = cluster + (cluster / 2);
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        case FAT_TYPE_16:
+            fat_offset = cluster * 2;
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        case FAT_TYPE_32:
+            fat_offset = cluster * 4;
+            fat_sector = fat_ctx.fat_start + (fat_offset / FAT_SECTOR_SIZE);
+            ent_offset = fat_offset % FAT_SECTOR_SIZE;
+            break;
+            
+        default:
+            return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Đọc sector chứa entry
+    uint8_t sector_buffer[FAT_SECTOR_SIZE];
+    int32_t ret = fat_read_sector(fat_sector, sector_buffer);
+    if (ret != FAT_SUCCESS) {
+        return ret;
+    }
+
+    // Ghi giá trị entry
+    switch (fat_ctx.config.fat_type) {
+        case FAT_TYPE_12:
+            if (cluster & 0x1) {
+                sector_buffer[ent_offset] = (sector_buffer[ent_offset] & 0x0F) |
+                                          ((next_cluster & 0x0F) << 4);
+                sector_buffer[ent_offset + 1] = (next_cluster >> 4) & 0xFF;
+            } else {
+                sector_buffer[ent_offset] = next_cluster & 0xFF;
+                sector_buffer[ent_offset + 1] = (sector_buffer[ent_offset + 1] & 0xF0) |
+                                              ((next_cluster >> 8) & 0x0F);
+            }
+            break;
+            
+        case FAT_TYPE_16:
+            sector_buffer[ent_offset] = next_cluster & 0xFF;
+            sector_buffer[ent_offset + 1] = (next_cluster >> 8) & 0xFF;
+            break;
+            
+        case FAT_TYPE_32:
+            sector_buffer[ent_offset] = next_cluster & 0xFF;
+            sector_buffer[ent_offset + 1] = (next_cluster >> 8) & 0xFF;
+            sector_buffer[ent_offset + 2] = (next_cluster >> 16) & 0xFF;
+            sector_buffer[ent_offset + 3] = (next_cluster >> 24) & 0xFF;
+            break;
+            
+        default:
+            return FAT_ERROR_INVALID_PARAMETER;
+    }
+
+    // Ghi sector đã cập nhật
+    ret = fat_write_sector(fat_sector, sector_buffer);
+    if (ret != FAT_SUCCESS) {
+        return ret;
+    }
+
+    return FAT_SUCCESS;
 }
 
 /*********************************************************************

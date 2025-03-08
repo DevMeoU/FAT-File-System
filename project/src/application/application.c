@@ -502,18 +502,18 @@ int main(void)
     /* Khởi tạo ứng dụng */
     if (app_init() != APP_SUCCESS) {
         log_error("Failed to initialize application");
-        return 1;
+        return -1;
     }
 
     /* Chạy ứng dụng */
     if (app_run() != APP_SUCCESS) {
         log_error("Application error");
-        return 1;
+        return -1;
     }
 
     return 0;
 }
 
 /*********************************************************************
- * UUID: ab8c3e2d-1a4f-4e85-9c6d-f8b2e3a1d5c9
+ * UUID: 5b8c3e2d-1a4f-4e85-9c6d-f8b2e3a1d5c9
  *********************************************************************/

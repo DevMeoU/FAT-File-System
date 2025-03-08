@@ -26,8 +26,7 @@ DEP_DIR   := $(BUILD_DIR)/dep
 # Các file nguồn
 #------------------
 # Tìm tất cả các file .c trong thư mục src và thư mục con
-SRCS := $(filter-out $(SRC_DIR)/template/%, $(wildcard $(SRC_DIR)/*/*.c)) \
-        $(wildcard $(SRC_DIR)/utilities/linkedlist/*.c)
+SRCS := $(shell find $(SRC_DIR) -name "*.c" ! -path "$(SRC_DIR)/template/*")
 
 # Tạo danh sách file object tương ứng
 OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
@@ -39,6 +38,8 @@ DEPS := $(SRCS:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
 # Cờ biên dịch
 #------------------
 CFLAGS := -Wall -Wextra -Werror \
+          -fdiagnostics-color=always \
+          -g \
           -O2 \
           -MMD -MP \
           -I$(SRC_DIR)/ip_driver \
@@ -50,7 +51,10 @@ CFLAGS := -Wall -Wextra -Werror \
           -I$(SRC_DIR)/utilities/log \
           -I$(SRC_DIR)/utilities/status
 
-LDFLAGS := 
+LDFLAGS := -lm -v
+ifeq ($(DUMP), ON)
+CFLAGS += -v
+endif
 
 #------------------
 # File đích

@@ -34,6 +34,10 @@ typedef enum {
     STATUS_NOT_READY = -7,  /* Chưa sẵn sàng */
     STATUS_FULL = -8,       /* Đã đầy */
     STATUS_EMPTY = -9,      /* Rỗng */
+    STATUS_DISK_FULL = -10, /* Đĩa đầy */
+    STATUS_ROOT_FULL = -11, /* Thư mục gốc đầy */
+    STATUS_INVALID_NAME = -12, /* Tên không hợp lệ */
+    STATUS_INVALID_PATH = -13, /* Đường dẫn không hợp lệ */
 } status_t;
 
 /* Result Type */
