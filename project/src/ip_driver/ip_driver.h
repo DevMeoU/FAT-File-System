@@ -52,6 +52,13 @@ typedef struct {
 int32_t ip_driver_init(const ip_config_t *config);
 
 /**
+ * @brief Close IP driver and release resources
+ * 
+ * @return IP_SUCCESS if successful, error code otherwise
+ */
+int32_t ip_close(void);
+
+/**
  * @brief Read sector from IP
  * 
  * @param sector Sector number

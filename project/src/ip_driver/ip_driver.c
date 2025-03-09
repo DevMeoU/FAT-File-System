@@ -59,4 +59,22 @@ int32_t ip_write_sector(uint32_t sector, const uint8_t *data) {
     fflush(storage_file);
 
     return IP_SUCCESS;
+}
+
+int32_t ip_close(void) {
+    if (!is_initialized || !storage_file) {
+        return IP_SUCCESS;
+    }
+
+    // Close storage file
+    if (fclose(storage_file) != 0) {
+        return IP_ERROR;
+    }
+
+    // Reset state
+    storage_file = NULL;
+    is_initialized = false;
+    memset(&ip_config, 0, sizeof(ip_config_t));
+
+    return IP_SUCCESS;
 } 

@@ -19,19 +19,12 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "../common/common_types.h"
 #include "../common/storage_driver.h"
 
 /*********************************************************************
  * Macro Definitions
  *********************************************************************/
-
-/* Status codes */
-#define HAL_SUCCESS            0x00
-#define HAL_ERROR             -1
-#define HAL_TIMEOUT           -2
-#define HAL_INVALID_PARAM     -3
-#define HAL_BUSY             -4
-#define HAL_NOT_READY        -5
 
 /* Storage Types */
 #define HAL_STORAGE_IP       0x01
@@ -53,15 +46,10 @@ extern "C" {
 
 /* HAL Configuration */
 typedef struct {
-    uint32_t clock_speed;     /* Tốc độ clock (Hz) */
-    uint32_t buffer_size;     /* Kích thước buffer */
-    uint32_t timeout;         /* Timeout mặc định (ms) */
-    bool interrupt_enable;    /* Cho phép ngắt */
-    uint8_t storage_type;    /* Loại storage đang sử dụng */
-    uint32_t sector_size;    /* Kích thước sector */
-    uint32_t sector_count;   /* Số lượng sector */
-    bool use_cache;          /* Sử dụng cache */
-    bool use_dma;           /* Sử dụng DMA */
+    const char *file_path;
+    uint32_t base_addr;
+    uint8_t irq_num;
+    bool use_dma;
 } hal_config_t;
 
 /* Device Information */
@@ -176,6 +164,8 @@ int32_t hal_reset(void);
  * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
 int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id);
+
+int32_t hal_deinit(void);
 
 #ifdef __cplusplus
 }

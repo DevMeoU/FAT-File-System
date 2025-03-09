@@ -14,6 +14,7 @@
 #include "middleware.h"
 #include "fat_driver.h"
 #include "print_color.h"
+#include "../hal/hal.h"
 
 /* Default storage file path */
 #define DEFAULT_STORAGE_FILE "floppy.img"
@@ -34,15 +35,15 @@ int32_t mid_init_with_file(const char *file_path)
         return MID_INVALID;
     }
 
-    /* Khởi tạo IP driver */
-    ip_config_t ip_config = {
+    /* Khởi tạo HAL */
+    hal_config_t hal_config = {
         .file_path = file_path,
         .base_addr = 0,
         .irq_num = 0,
         .use_dma = false
     };
-    if (ip_driver_init(&ip_config) != IP_SUCCESS) {
-        log_error("Failed to initialize IP driver");
+    if (hal_init(&hal_config) != STATUS_SUCCESS) {
+        log_error("Failed to initialize HAL");
         return MID_ERROR;
     }
 
@@ -51,6 +52,7 @@ int32_t mid_init_with_file(const char *file_path)
     // TODO: Load configuration
     if (fat_init(&fat_config) != STATUS_SUCCESS) {
         log_error("Failed to initialize FAT driver");
+        hal_deinit();
         return MID_ERROR;
     }
 

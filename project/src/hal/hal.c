@@ -2,9 +2,8 @@
  * ✨ Author: Ducson9112k 🌟
  * 
  * Description:
- *   Module HAL (Hardware Abstraction Layer) cung cấp interface để tương tác
- *   với phần cứng, cho phép truy cập các tài nguyên phần cứng một cách
- *   độc lập với nền tảng cụ thể.
+ *   Hardware Abstraction Layer (HAL) module cung cấp các hàm trung gian
+ *   để truy cập phần cứng thông qua IP Driver.
  *********************************************************************/
 
 /*********************************************************************
@@ -13,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "../common/common_types.h"
 #include "hal.h"
 #include "hal_private.h"
 #include "../ip_driver/ip_driver.h"
@@ -26,6 +26,7 @@ static hal_context_t hal_ctx;
 static hal_config_t hal_config;
 static hal_status_t hal_status;
 static hal_transfer_mode_t transfer_mode = HAL_MODE_POLLING;
+static bool hal_initialized = false;
 
 /*********************************************************************
  * Private Function Implementations
@@ -42,12 +43,12 @@ __attribute__((unused))
 static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size)
 {
     if (buffer == NULL || size == 0) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     buffer->buffer = (uint8_t *)malloc(size);
     if (buffer->buffer == NULL) {
-        return HAL_ERROR;
+        return STATUS_ERROR;
     }
 
     buffer->size = size;
@@ -55,7 +56,7 @@ static int32_t hal_init_ring_buffer(hal_ring_buffer_t *buffer, uint32_t size)
     buffer->tail = 0;
     buffer->count = 0;
 
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 /**
@@ -145,13 +146,12 @@ static void hal_irq_handler(void)
  * @param write true if write operation
  * @return HAL_SUCCESS nếu thành công, mã lỗi nếu thất bại
  */
-__attribute__((unused))
 static int32_t hal_cache_manage(uint32_t sector,
                               uint8_t *data,
                               bool write)
 {
     if (!data) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     // Kiểm tra cache hit
@@ -164,20 +164,20 @@ static int32_t hal_cache_manage(uint32_t sector,
             // Đọc từ cache
             memcpy(data, hal_ctx.cache.data, STORAGE_MAX_SECTOR_SIZE);
         }
-        return HAL_SUCCESS;
+        return STATUS_SUCCESS;
     }
 
     // Cache miss, cần flush cache cũ nếu dirty
     if (hal_ctx.cache.valid && hal_ctx.cache.dirty) {
         int32_t ret = hal_write_sector(hal_ctx.cache.sector, hal_ctx.cache.data);
-        if (ret != HAL_SUCCESS) {
+        if (ret != STATUS_SUCCESS) {
             return ret;
         }
     }
 
     // Đọc sector mới vào cache
     int32_t ret = hal_read_sector(sector, hal_ctx.cache.data);
-    if (ret != HAL_SUCCESS) {
+    if (ret != STATUS_SUCCESS) {
         hal_ctx.cache.valid = false;
         return ret;
     }
@@ -193,7 +193,7 @@ static int32_t hal_cache_manage(uint32_t sector,
         memcpy(data, hal_ctx.cache.data, STORAGE_MAX_SECTOR_SIZE);
     }
 
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 /*********************************************************************
@@ -203,110 +203,81 @@ static int32_t hal_cache_manage(uint32_t sector,
 int32_t hal_init(const hal_config_t *config)
 {
     if (!config) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID;
     }
 
-    // Lưu cấu hình
-    memcpy(&hal_config, config, sizeof(hal_config_t));
+    /* Khởi tạo IP driver */
+    ip_config_t ip_config = {
+        .file_path = config->file_path,
+        .base_addr = config->base_addr,
+        .irq_num = config->irq_num,
+        .use_dma = config->use_dma
+    };
 
-    // Khởi tạo status
+    if (ip_driver_init(&ip_config) != IP_SUCCESS) {
+        return STATUS_ERROR;
+    }
+
+    /* Khởi tạo context */
+    memset(&hal_ctx, 0, sizeof(hal_context_t));
+    memcpy(&hal_config, config, sizeof(hal_config_t));
     memset(&hal_status, 0, sizeof(hal_status_t));
     hal_status.is_initialized = true;
 
-    // Khởi tạo IP driver nếu đang sử dụng storage IP
-    if (config->storage_type == HAL_STORAGE_IP) {
-        ip_config_t ip_config = {0};
-        // TODO: Set up IP config
-        int32_t ret = ip_driver_init(&ip_config);
-        if (ret != IP_SUCCESS) {
-            return HAL_ERROR;
-        }
-    }
-
-    /* Initialize context */
-    memset(&hal_ctx, 0, sizeof(hal_ctx));
-    hal_ctx.config = *config;
-    hal_ctx.reg = (hal_reg_map_t *)HAL_REG_BASE_ADDR;
-    hal_ctx.state = HAL_STATE_INITIALIZED;
-
-    /* Initialize ring buffers */
-    int32_t ret = hal_init_ring_buffer(&hal_ctx.rx_buffer, HAL_RX_BUFFER_SIZE);
-    if (ret != HAL_SUCCESS) {
-        return ret;
-    }
-
-    ret = hal_init_ring_buffer(&hal_ctx.tx_buffer, HAL_TX_BUFFER_SIZE);
-    if (ret != HAL_SUCCESS) {
-        free(hal_ctx.rx_buffer.buffer);
-        return ret;
-    }
-
-    /* Configure hardware */
-    hal_ctx.reg->control = HAL_CONTROL_RESET;
-    hal_ctx.reg->int_enable = config->interrupt_enable ? 
-                             (HAL_INT_RX_READY | HAL_INT_ERROR) : 0;
-
-    return HAL_SUCCESS;
+    hal_initialized = true;
+    return STATUS_SUCCESS;
 }
 
-int32_t hal_read_sector(uint32_t sector, uint8_t *buffer) {
-    if (!buffer || !hal_status.is_initialized) {
-        return HAL_INVALID_PARAM;
+int32_t hal_read_sector(uint32_t sector, uint8_t *buffer)
+{
+    if (!hal_initialized || !buffer) {
+        return STATUS_INVALID;
     }
 
-    // Gọi hàm tương ứng theo loại storage
-    switch (hal_config.storage_type) {
-        case HAL_STORAGE_IP:
-            return ip_read_sector(sector, buffer);
-            
-        case HAL_STORAGE_FLASH:
-            // TODO: Implement Flash read
-            return HAL_ERROR;
-            
-        case HAL_STORAGE_SD:
-            // TODO: Implement SD read
-            return HAL_ERROR;
-            
-        default:
-            return HAL_ERROR;
-    }
+    return (ip_read_sector(sector, buffer) == IP_SUCCESS) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
-int32_t hal_write_sector(uint32_t sector, const uint8_t *buffer) {
-    if (!buffer || !hal_status.is_initialized) {
-        return HAL_INVALID_PARAM;
+int32_t hal_write_sector(uint32_t sector, const uint8_t *buffer)
+{
+    if (!hal_initialized || !buffer) {
+        return STATUS_INVALID;
     }
 
-    // Gọi hàm tương ứng theo loại storage
-    switch (hal_config.storage_type) {
-        case HAL_STORAGE_IP:
-            return ip_write_sector(sector, buffer);
-            
-        case HAL_STORAGE_FLASH:
-            // TODO: Implement Flash write
-            return HAL_ERROR;
-            
-        case HAL_STORAGE_SD:
-            // TODO: Implement SD write
-            return HAL_ERROR;
-            
-        default:
-            return HAL_ERROR;
-    }
+    return (ip_write_sector(sector, buffer) == IP_SUCCESS) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
-int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout) {
+int32_t hal_deinit(void)
+{
+    if (!hal_initialized) {
+        return STATUS_SUCCESS;
+    }
+
+    /* Đóng file trong IP driver */
+    if (ip_close() != IP_SUCCESS) {
+        return STATUS_ERROR;
+    }
+
+    /* Reset context */
+    memset(&hal_ctx, 0, sizeof(hal_context_t));
+    memset(&hal_status, 0, sizeof(hal_status_t));
+    hal_initialized = false;
+
+    return STATUS_SUCCESS;
+}
+
+int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout)
+{
     if (!buffer || size == 0 || size > HAL_MAX_BUFFER_SIZE || 
         timeout < HAL_MIN_TIMEOUT || timeout > HAL_MAX_TIMEOUT) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     if (!hal_status.is_initialized) {
-        return HAL_NOT_READY;
+        return STATUS_NOT_READY;
     }
 
     if (hal_status.is_busy) {
-        return HAL_BUSY;
+        return STATUS_BUSY;
     }
 
     hal_status.is_busy = true;
@@ -315,21 +286,22 @@ int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout) {
     // TODO: Implement actual read based on transfer mode
 
     hal_status.is_busy = false;
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
-int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout) {
+int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout)
+{
     if (!buffer || size == 0 || size > HAL_MAX_BUFFER_SIZE ||
         timeout < HAL_MIN_TIMEOUT || timeout > HAL_MAX_TIMEOUT) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     if (!hal_status.is_initialized) {
-        return HAL_NOT_READY;
+        return STATUS_NOT_READY;
     }
 
     if (hal_status.is_busy) {
-        return HAL_BUSY;
+        return STATUS_BUSY;
     }
 
     hal_status.is_busy = true;
@@ -338,14 +310,14 @@ int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout) {
     // TODO: Implement actual write based on transfer mode
 
     hal_status.is_busy = false;
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
 {
     (void)event_id; // Unused parameter
     if (!callback) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     // Tìm slot trống
@@ -353,11 +325,11 @@ int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
         if (hal_ctx.callbacks[i].callback == NULL) {
             hal_ctx.callbacks[i].callback = callback;
             hal_ctx.callbacks[i].param = NULL;
-            return HAL_SUCCESS;
+            return STATUS_SUCCESS;
         }
     }
 
-    return HAL_ERROR;
+    return STATUS_ERROR;
 }
 
 int32_t hal_unregister_callback(uint32_t event_id)
@@ -368,29 +340,31 @@ int32_t hal_unregister_callback(uint32_t event_id)
         if (hal_ctx.callbacks[i].callback != NULL) {
             hal_ctx.callbacks[i].callback = NULL;
             hal_ctx.callbacks[i].param = NULL;
-            return HAL_SUCCESS;
+            return STATUS_SUCCESS;
         }
     }
 
-    return HAL_ERROR;
+    return STATUS_ERROR;
 }
 
-int32_t hal_set_transfer_mode(hal_transfer_mode_t mode) {
+int32_t hal_set_transfer_mode(hal_transfer_mode_t mode)
+{
     if (mode > HAL_MODE_DMA) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     transfer_mode = mode;
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
-int32_t hal_get_device_info(hal_device_info_t *info) {
+int32_t hal_get_device_info(hal_device_info_t *info)
+{
     if (!info) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     if (!hal_status.is_initialized) {
-        return HAL_NOT_READY;
+        return STATUS_NOT_READY;
     }
 
     // TODO: Get actual device info
@@ -399,21 +373,23 @@ int32_t hal_get_device_info(hal_device_info_t *info) {
     info->version = 0;
     info->capabilities = 0;
 
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
-int32_t hal_get_status(hal_status_t *status) {
+int32_t hal_get_status(hal_status_t *status)
+{
     if (!status) {
-        return HAL_INVALID_PARAM;
+        return STATUS_INVALID_PARAMETER;
     }
 
     memcpy(status, &hal_status, sizeof(hal_status_t));
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
-int32_t hal_reset(void) {
+int32_t hal_reset(void)
+{
     if (!hal_status.is_initialized) {
-        return HAL_NOT_READY;
+        return STATUS_NOT_READY;
     }
 
     // Reset status
@@ -423,7 +399,7 @@ int32_t hal_reset(void) {
     // Reset transfer mode
     transfer_mode = HAL_MODE_POLLING;
 
-    return HAL_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 /*********************************************************************

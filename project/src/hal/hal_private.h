@@ -57,6 +57,9 @@ extern "C" {
  * Type Definitions
  *********************************************************************/
 
+/* Callback function type */
+typedef void (*callback_t)(void *param);
+
 /* Ring buffer structure */
 typedef struct {
     uint8_t *buffer;    /* Buffer pointer */
