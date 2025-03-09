@@ -11,8 +11,8 @@ required_dirs=(
     "project/src/application"
     "project/src/utilities"
     "project/src/utilities/log"
-    "project/src/utilities/status"
     "project/src/utilities/linkedlist"
+    "project/src/common"
 )
 
 echo "=== Tạo cấu trúc dự án FAT File System Manager ==="
@@ -32,6 +32,8 @@ done
 echo "2. Tạo files cho IP Driver..."
 touch project/src/ip_driver/ip_driver.h
 touch project/src/ip_driver/ip_driver.c
+touch project/src/ip_driver/ip_driver_private.h
+touch project/src/ip_driver/ip_driver_private.c
 
 # Tạo các file trong hal
 echo "3. Tạo files cho HAL..."
@@ -44,7 +46,7 @@ echo "4. Tạo files cho FAT Driver..."
 touch project/src/fat_driver/fat_driver.h
 touch project/src/fat_driver/fat_driver.c
 touch project/src/fat_driver/fat_driver_private.h
-touch project/src/fat_driver/fat_driver_private.c
+touch project/src/fat_driver/fat_driver_types.h
 touch project/src/fat_driver/README.md
 
 # Tạo các file trong middleware
@@ -61,14 +63,17 @@ touch project/src/application/application.c
 echo "7. Tạo files cho Utilities..."
 # Log module
 touch project/src/utilities/log/print_color.h
-# Status module
-touch project/src/utilities/status/common_type.h
+touch project/src/utilities/log/print_color.c
 # Linkedlist module
 touch project/src/utilities/linkedlist/linkedlist.h
 touch project/src/utilities/linkedlist/linkedlist.c
 
+# Tạo các file trong common
+echo "8. Tạo files cho Common..."
+touch project/src/common/common_types.h
+
 # Tạo Makefile và README
-echo "8. Tạo Makefile và README..."
+echo "9. Tạo Makefile và README..."
 touch project/Makefile
 touch project/README.md
 

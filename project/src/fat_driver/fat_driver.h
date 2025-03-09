@@ -14,28 +14,18 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "fat_driver_types.h"
 #include "../common/common_types.h"
+#include "fat_driver_types.h"
+#include "fat_driver_errors.h"
 
 /*********************************************************************
  * Macro Definitions
  *********************************************************************/
 
-/* FAT Entry Values */
-#define FAT12_MASK       0x0FFF
-#define FAT16_MASK       0xFFFF
-#define FAT32_MASK       0x0FFFFFFF
-#define FAT12_EOC        0x0FF8
-#define FAT16_EOC        0xFFF8
-#define FAT32_EOC        0x0FFFFFF8
-#define FAT_FREE_CLUSTER 0x00000000
-
-/* File Access Modes */
-#define FAT_MODE_READ       0x01
-#define FAT_MODE_WRITE      0x02
-#define FAT_MODE_CREATE     0x04
-#define FAT_MODE_APPEND     0x08
-#define FAT_MODE_TRUNCATE   0x10
+/* Seek Origins */
+#define SEEK_SET    0
+#define SEEK_CUR    1
+#define SEEK_END    2
 
 /*********************************************************************
  * Public Function Prototypes
