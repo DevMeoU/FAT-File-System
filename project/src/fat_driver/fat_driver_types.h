@@ -40,11 +40,60 @@
 #define FAT_MODE_TRUNCATE   0x10
 
 /* Forward declarations */
-typedef struct fat_dir_entry fat_dir_entry_t;
-typedef struct fat_file_info fat_file_info_t;
-typedef struct fat_file fat_file_t;
-typedef struct fat_config fat_config_t;
-typedef struct fat_boot_sector fat_boot_sector_t;
+struct fat_file_info;
+struct fat_file;
+struct fat_config;
+struct fat_boot_sector;
+
+/* FAT Directory Entry */
+struct __attribute__((packed)) fat_dir_entry {
+    uint8_t  name[11];           /* 8.3 filename */
+    uint8_t  attributes;         /* File attributes */
+    uint8_t  reserved;          /* Reserved for Windows NT */
+    uint8_t  creation_time_ms;  /* Creation time, milliseconds */
+    uint16_t creation_time;     /* Creation time */
+    uint16_t creation_date;     /* Creation date */
+    uint16_t last_access_date;  /* Last access date */
+    uint16_t first_cluster_hi;  /* High word of first cluster number */
+    uint16_t last_write_time;   /* Last write time */
+    uint16_t last_write_date;   /* Last write date */
+    uint16_t first_cluster_lo;  /* Low word of first cluster number */
+    uint32_t file_size;         /* File size in bytes */
+};
+
+/* File Information Structure */
+struct fat_file_info {
+    char     name[256];
+    uint32_t size;
+    uint8_t  attributes;
+    uint32_t cluster;
+    uint16_t date;
+    uint16_t time;
+};
+
+/* File Handle Structure */
+struct fat_file {
+    struct fat_file_info info;
+    uint32_t position;
+    uint32_t cluster;
+    uint32_t sector;
+    uint32_t offset;
+    uint8_t  mode;
+    bool     modified;
+};
+
+/* FAT Configuration Structure */
+struct fat_config {
+    uint8_t  fat_type;          /* FAT type (12/16/32) */
+    uint32_t total_sectors;     /* Total number of sectors */
+    uint32_t bytes_per_sector;  /* Number of bytes per sector */
+    uint32_t sectors_per_cluster; /* Number of sectors per cluster */
+    uint32_t reserved_sectors;  /* Number of reserved sectors */
+    uint32_t number_of_fats;    /* Number of FAT copies */
+    uint32_t root_entries;      /* Maximum number of root directory entries */
+    uint32_t total_clusters;    /* Total number of clusters */
+    bool     use_cache;         /* Whether to use sector caching */
+};
 
 /* FAT Boot Sector */
 struct __attribute__((packed)) fat_boot_sector {
@@ -90,54 +139,11 @@ struct __attribute__((packed)) fat_boot_sector {
     uint16_t signature;
 };
 
-/* FAT Directory Entry */
-struct __attribute__((packed)) fat_dir_entry {
-    uint8_t  name[11];           /* 8.3 filename */
-    uint8_t  attributes;         /* File attributes */
-    uint8_t  reserved;          /* Reserved for Windows NT */
-    uint8_t  creation_time_ms;  /* Creation time, milliseconds */
-    uint16_t creation_time;     /* Creation time */
-    uint16_t creation_date;     /* Creation date */
-    uint16_t last_access_date;  /* Last access date */
-    uint16_t first_cluster_hi;  /* High word of first cluster number */
-    uint16_t last_write_time;   /* Last write time */
-    uint16_t last_write_date;   /* Last write date */
-    uint16_t first_cluster_lo;  /* Low word of first cluster number */
-    uint32_t file_size;         /* File size in bytes */
-};
-
-/* File Information Structure */
-struct fat_file_info {
-    char     name[256];
-    uint32_t size;
-    uint8_t  attributes;
-    uint32_t cluster;
-    uint16_t date;
-    uint16_t time;
-};
-
-/* File Handle Structure */
-struct fat_file {
-    fat_file_info_t info;
-    uint32_t position;
-    uint32_t cluster;
-    uint32_t sector;
-    uint32_t offset;
-    uint8_t  mode;
-    bool     modified;
-};
-
-/* FAT Configuration Structure */
-struct fat_config {
-    uint8_t  fat_type;          /* FAT type (12/16/32) */
-    uint32_t total_sectors;     /* Total number of sectors */
-    uint32_t bytes_per_sector;  /* Number of bytes per sector */
-    uint32_t sectors_per_cluster; /* Number of sectors per cluster */
-    uint32_t reserved_sectors;  /* Number of reserved sectors */
-    uint32_t number_of_fats;    /* Number of FAT copies */
-    uint32_t root_entries;      /* Maximum number of root directory entries */
-    uint32_t total_clusters;    /* Total number of clusters */
-    bool     use_cache;         /* Whether to use sector caching */
-};
+/* Type definitions */
+typedef struct fat_dir_entry fat_dir_entry_t;
+typedef struct fat_file_info fat_file_info_t;
+typedef struct fat_file fat_file_t;
+typedef struct fat_config fat_config_t;
+typedef struct fat_boot_sector fat_boot_sector_t;
 
 #endif /* __FAT_DRIVER_TYPES_H */ 

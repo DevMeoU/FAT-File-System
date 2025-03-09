@@ -90,9 +90,9 @@ int32_t app_init(void)
     app_is_running = true;
 
     /* Hiển thị thông báo chào mừng */
-    printf("\nWelcome to FAT File System Shell!\n");
-    printf("Please use 'mount <file>' to mount a file system\n");
-    printf("Type 'help' for list of commands\n\n");
+    print_text("\nWelcome to FAT File System Shell!\n", COLOR_GREEN, COLOR_BLACK);
+    print_text("Please use 'mount <file>' to mount a file system\n", COLOR_GREEN, COLOR_BLACK);
+    print_text("Type 'help' for list of commands\n\n", COLOR_GREEN, COLOR_BLACK);
 
     return APP_SUCCESS;
 }
@@ -198,7 +198,7 @@ int32_t app_list_directory(const char *target_path)
     
     /* Open directory */
     if (fat_open(target_path, FAT_MODE_READ, &dir) != STATUS_SUCCESS) {
-        printf("Error: Could not open directory %s\n", target_path);
+        log_error("Could not open directory %s", target_path);
         return STATUS_ERROR;
     }
 

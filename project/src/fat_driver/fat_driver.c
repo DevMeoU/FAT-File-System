@@ -16,10 +16,10 @@
 #include <time.h>
 #include "../common/common_types.h"
 #include "fat_driver_types.h"
-#include "fat_driver.h"
 #include "fat_driver_private.h"
 #include "../ip_driver/ip_driver.h"
 #include "../common/storage_driver.h"
+#include "fat_driver.h"
 
 /*********************************************************************
  * Private Variables
@@ -946,78 +946,49 @@ static void fat_get_name(const fat_dir_entry_t *entry, char *name) {
 
 int32_t fat_find_file(const char *path, fat_dir_entry_t *entry)
 {
-    if (path == NULL || entry == NULL) {
-        return STATUS_INVALID;
+    if (!path || !entry) {
+        return STATUS_INVALID_PARAMETER;
     }
 
-    char *path_copy = strdup(path);
-    if (!path_copy) {
-        return STATUS_NO_MEMORY;
+    /* Khởi tạo entry */
+    memset(entry, 0, sizeof(fat_dir_entry_t));
+
+    /* Bắt đầu từ cluster gốc */
+    uint32_t current_cluster = fat_ctx.root_cluster;
+    uint32_t offset = 0;
+    uint8_t sector_buffer[FAT_SECTOR_SIZE];
+
+    /* Đọc sector đầu tiên */
+    if (read_sector(fat_cluster_to_sector(current_cluster), sector_buffer) != STATUS_SUCCESS) {
+        return STATUS_READ_FAILED;
     }
 
-    // ... rest of the function implementation ...
-    /* Tách đường dẫn thành các thành phần */
-    char *token = strtok(path_copy, "/");
-    if (!token) {
-        free(path_copy);
-        return STATUS_INVALID;
-    }
-
-    /* Bắt đầu từ thư mục gốc */
-    uint32_t current_cluster = fat_ctx.config.root_cluster;
-    fat_dir_entry_t current_entry;
-    bool found = false;
-
-    while (token) {
-        found = false;
+    /* Tìm entry trong thư mục */
+    while (offset < FAT_SECTOR_SIZE) {
+        fat_dir_entry_t *current_entry = (fat_dir_entry_t *)&sector_buffer[offset];
         
-        /* Đọc các entry trong thư mục hiện tại */
-        uint32_t sector = fat_cluster_to_sector(current_cluster);
-        uint32_t offset = 0;
+        /* Kiểm tra entry có hợp lệ không */
+        if (current_entry->name[0] == FAT_DIR_EMPTY) {
+            break;  /* Hết thư mục */
+        }
         
-        while (offset < fat_ctx.config.bytes_per_sector) {
-            /* Đọc entry */
-            if (storage_read_sector(sector, (uint8_t *)&current_entry) != STATUS_SUCCESS) {
-                free(path_copy);
-                return STATUS_READ_FAILED;
-            }
-
-            /* Kiểm tra entry rỗng */
-            if (current_entry.name[0] == 0x00) {
-                break;
-            }
-
-            /* Bỏ qua entry đã xóa */
-            if (current_entry.name[0] == 0xE5) {
-                offset += sizeof(fat_dir_entry_t);
-                continue;
-            }
-
-            /* So sánh tên */
-            char name[13];
-            fat_get_name(&current_entry, name);
-            if (strcmp(token, name) == 0) {
-                found = true;
-                current_cluster = (current_entry.first_cluster_hi << 16) | 
-                                 current_entry.first_cluster_lo;
-                break;
-            }
-
-            offset += sizeof(fat_dir_entry_t);
+        if (current_entry->name[0] == FAT_DIR_DELETED) {
+            offset += FAT_DIR_ENTRY_SIZE;
+            continue;
         }
 
-        if (!found) {
-            free(path_copy);
-            return STATUS_NOT_FOUND;
+        /* So sánh tên file */
+        char entry_name[13];
+        fat_get_name(current_entry, entry_name);
+        if (strcmp(entry_name, path) == 0) {
+            memcpy(entry, current_entry, sizeof(fat_dir_entry_t));
+            return STATUS_SUCCESS;
         }
 
-        token = strtok(NULL, "/");
+        offset += FAT_DIR_ENTRY_SIZE;
     }
 
-    /* Copy entry cuối cùng */
-    memcpy(entry, &current_entry, sizeof(fat_dir_entry_t));
-    free(path_copy);
-    return STATUS_SUCCESS;
+    return STATUS_NOT_FOUND;
 }
 
 int32_t fat_create_file(const char *path, fat_dir_entry_t *entry)

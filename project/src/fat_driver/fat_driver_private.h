@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "fat_driver.h"
 #include "fat_driver_types.h"
 #include "../common/common_types.h"
 
