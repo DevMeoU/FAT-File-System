@@ -15,10 +15,11 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
-#include "fat_driver_private.h"
 #include "../common/common_types.h"
-#include "../ip_driver/ip_driver.h"
-#include "../common/storage_driver.h"
+#include "fat_driver_types.h"
+#include "fat_driver_private.h"
+#include "../hal/hal.h"
+#include "fat_driver.h"
 
 /* Global variables */
 extern fat_context_t fat_ctx;
@@ -57,26 +58,28 @@ static int32_t fat_free_cluster_impl(uint32_t cluster);
 static int32_t fat_read_sector(uint32_t sector, uint8_t *buffer)
 {
     if (!buffer) {
-        return STATUS_INVALID_PARAMETER;
+        return STATUS_INVALID;
     }
 
     #if FAT_ENABLE_CACHE
     // Kiểm tra cache
-    uint32_t cache_index = sector % FAT_CACHE_SIZE;
-    if (fat_ctx.cache[cache_index].valid && fat_ctx.cache[cache_index].sector == sector) {
-        memcpy(buffer, fat_ctx.cache[cache_index].data, FAT_SECTOR_SIZE);
-        return STATUS_SUCCESS;
+    for (int i = 0; i < FAT_CACHE_SIZE; i++) {
+        if (fat_ctx.cache[i].valid && fat_ctx.cache[i].sector == sector) {
+            memcpy(buffer, fat_ctx.cache[i].data, FAT_SECTOR_SIZE);
+            return STATUS_SUCCESS;
+        }
     }
     #endif
 
-    // Đọc từ thiết bị thông qua storage driver
-    int32_t ret = storage_read_sector(sector, buffer);
+    // Đọc từ thiết bị thông qua HAL
+    int32_t ret = hal_read_sector(sector, buffer);
     if (ret != STATUS_SUCCESS) {
         return STATUS_READ_FAILED;
     }
 
     #if FAT_ENABLE_CACHE
     // Cập nhật cache
+    uint32_t cache_index = sector % FAT_CACHE_SIZE;
     fat_ctx.cache[cache_index].sector = sector;
     memcpy(fat_ctx.cache[cache_index].data, buffer, FAT_SECTOR_SIZE);
     fat_ctx.cache[cache_index].valid = true;
@@ -89,11 +92,11 @@ static int32_t fat_read_sector(uint32_t sector, uint8_t *buffer)
 static int32_t fat_write_sector(uint32_t sector, const uint8_t *buffer)
 {
     if (!buffer) {
-        return STATUS_INVALID_PARAMETER;
+        return STATUS_INVALID;
     }
 
-    // Ghi xuống thiết bị thông qua storage driver
-    int32_t ret = storage_write_sector(sector, buffer);
+    // Ghi xuống thiết bị thông qua HAL
+    int32_t ret = hal_write_sector(sector, buffer);
     if (ret != STATUS_SUCCESS) {
         return STATUS_WRITE_FAILED;
     }

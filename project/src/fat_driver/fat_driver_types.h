@@ -93,50 +93,44 @@ struct fat_config {
     uint32_t root_entries;      /* Maximum number of root directory entries */
     uint32_t total_clusters;    /* Total number of clusters */
     bool     use_cache;         /* Whether to use sector caching */
+    
+    /* HAL Configuration */
+    const char *file_path;      /* Path to the storage file */
+    uint32_t base_addr;         /* Base address for hardware access */
+    uint8_t irq_num;           /* Interrupt number */
+    bool use_dma;              /* Whether to use DMA */
 };
 
 /* FAT Boot Sector */
 struct __attribute__((packed)) fat_boot_sector {
-    uint8_t  jump_boot[3];
-    uint8_t  oem_name[8];
-    uint16_t bytes_per_sector;
-    uint8_t  sectors_per_cluster;
-    uint16_t reserved_sectors;
-    uint8_t  num_fats;
-    uint16_t root_entries;
-    uint16_t total_sectors_16;
-    uint8_t  media_type;
-    uint16_t fat_size_16;
-    uint16_t sectors_per_track;
-    uint16_t num_heads;
-    uint32_t hidden_sectors;
-    uint32_t total_sectors_32;
-    union {
-        struct {
-            uint8_t  drive_number;
-            uint8_t  reserved1;
-            uint8_t  boot_signature;
-            uint32_t volume_id;
-            uint8_t  volume_label[11];
-            uint8_t  fs_type[8];
-        } fat16;
-        struct {
-            uint32_t fat_size_32;
-            uint16_t ext_flags;
-            uint16_t fs_version;
-            uint32_t root_cluster;
-            uint16_t fs_info;
-            uint16_t backup_boot;
-            uint8_t  reserved[12];
-            uint8_t  drive_number;
-            uint8_t  reserved1;
-            uint8_t  boot_signature;
-            uint32_t volume_id;
-            uint8_t  volume_label[11];
-            uint8_t  fs_type[8];
-        } fat32;
-    };
-    uint16_t signature;
+    uint8_t  jump_boot[3];      /* 0x00: Jump instruction */
+    uint8_t  oem_name[8];       /* 0x03: OEM name */
+    uint16_t bytes_per_sector;  /* 0x0B: Bytes per sector */
+    uint8_t  sectors_per_cluster; /* 0x0D: Sectors per cluster */
+    uint16_t reserved_sectors;  /* 0x0E: Reserved sectors */
+    uint8_t  num_fats;         /* 0x10: Number of FATs */
+    uint16_t root_entries;     /* 0x11: Root directory entries */
+    uint16_t total_sectors_16; /* 0x13: Total sectors (16-bit) */
+    uint8_t  media_type;       /* 0x15: Media type */
+    uint16_t fat_size_16;      /* 0x16: FAT size in sectors (16-bit) */
+    uint16_t sectors_per_track; /* 0x18: Sectors per track */
+    uint16_t num_heads;        /* 0x1A: Number of heads */
+    uint32_t hidden_sectors;   /* 0x1C: Hidden sectors */
+    uint32_t total_sectors_32; /* 0x20: Total sectors (32-bit) */
+    
+    /* Extended Boot Sector (0x24-0x3D) */
+    uint8_t  drive_number;     /* 0x24: Drive number */
+    uint8_t  reserved1;        /* 0x25: Reserved for Windows NT */
+    uint8_t  boot_signature;   /* 0x26: Boot signature (0x28 or 0x29) */
+    uint32_t volume_id;        /* 0x27: Volume ID */
+    uint8_t  volume_label[11]; /* 0x2B: Volume label */
+    uint8_t  fs_type[8];       /* 0x36: File system type */
+    
+    /* Boot Code (0x3E-0x1FD) */
+    uint8_t  boot_code[448];   /* 0x3E: Boot code */
+    
+    /* Boot Signature (0x1FE-0x1FF) */
+    uint16_t signature;        /* 0x1FE: Boot signature (0xAA55) */
 };
 
 /* Type definitions */

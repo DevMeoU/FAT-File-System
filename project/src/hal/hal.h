@@ -6,8 +6,8 @@
  *   với phần cứng, cho phép truy cập các tài nguyên phần cứng một cách
  *   độc lập với nền tảng cụ thể.
  *********************************************************************/
-#ifndef __HAL_H
-#define __HAL_H
+#ifndef HAL_H
+#define HAL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,9 +18,7 @@ extern "C" {
  *********************************************************************/
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 #include "../common/common_types.h"
-#include "../common/storage_driver.h"
 
 /*********************************************************************
  * Macro Definitions
@@ -171,7 +169,7 @@ int32_t hal_deinit(void);
 }
 #endif
 
-#endif /* __HAL_H */
+#endif /* HAL_H */
 
 /*********************************************************************
  * UUID: 3f8d2e1c-9b4a-4e85-8c6d-f7b2e3a1d5c9

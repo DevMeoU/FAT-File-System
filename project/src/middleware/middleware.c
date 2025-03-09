@@ -14,7 +14,6 @@
 #include "middleware.h"
 #include "fat_driver.h"
 #include "print_color.h"
-#include "../hal/hal.h"
 
 /* Default storage file path */
 #define DEFAULT_STORAGE_FILE "floppy.img"
@@ -35,24 +34,26 @@ int32_t mid_init_with_file(const char *file_path)
         return MID_INVALID;
     }
 
-    /* Khởi tạo HAL */
-    hal_config_t hal_config = {
+    /* Khởi tạo FAT driver */
+    fat_config_t fat_config = {
         .file_path = file_path,
-        .base_addr = 0,
-        .irq_num = 0,
-        .use_dma = false
+        .fat_type = FAT_TYPE_32,           /* Sử dụng FAT32 */
+        .bytes_per_sector = FAT_SECTOR_SIZE,
+        .use_cache = true                  /* Bật cache để tăng hiệu suất */
     };
-    if (hal_init(&hal_config) != STATUS_SUCCESS) {
-        log_error("Failed to initialize HAL");
+    if (fat_init(&fat_config) != STATUS_SUCCESS) {
+        log_error("Failed to initialize FAT driver");
         return MID_ERROR;
     }
 
-    /* Khởi tạo FAT driver */
-    fat_config_t fat_config = {0};
-    // TODO: Load configuration
-    if (fat_init(&fat_config) != STATUS_SUCCESS) {
-        log_error("Failed to initialize FAT driver");
-        hal_deinit();
+    return MID_SUCCESS;
+}
+
+int32_t mid_deinit(void)
+{
+    /* Giải phóng FAT driver */
+    if (fat_deinit() != STATUS_SUCCESS) {
+        log_error("Failed to deinitialize FAT driver");
         return MID_ERROR;
     }
 
