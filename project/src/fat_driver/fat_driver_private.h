@@ -50,6 +50,11 @@ int32_t fat_find_free_cluster(uint32_t *cluster);
 int32_t fat_convert_to_short_name(const char *name, char *short_name);
 void fat_get_name(const fat_dir_entry_t *entry, char *name);
 
+/* Private function prototypes */
+int32_t calculate_layout(const fat_boot_sector_t *boot_sector);
+uint32_t get_fat_size(const fat_boot_sector_t *boot_sector);
+int32_t fat_deinit(void);
+
 #endif /* FAT_DRIVER_PRIVATE_H */
 
 /*********************************************************************

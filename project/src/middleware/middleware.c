@@ -30,35 +30,29 @@ int32_t mid_init(void)
 
 int32_t mid_init_with_file(const char *file_path)
 {
-    if (!file_path) {
-        return MID_INVALID;
+    if (file_path == NULL) {
+        return STATUS_INVALID;
     }
 
-    /* Khởi tạo FAT driver */
+    /* Khởi tạo cấu hình FAT */
     fat_config_t fat_config;
     memset(&fat_config, 0, sizeof(fat_config_t));
-    
-    /* Copy file path */
-    strncpy(fat_config.file_path, file_path, sizeof(fat_config.file_path) - 1);
-    fat_config.file_path[sizeof(fat_config.file_path) - 1] = '\0';
-    
-    /* Set other parameters */
-    fat_config.fat_type = FAT_TYPE_32;           /* Sử dụng FAT32 */
-    fat_config.sectors_per_cluster = 1;          /* 1 sector/cluster */
-    fat_config.reserved_sectors = 32;            /* 32 sector dành riêng */
-    fat_config.root_dir_sectors = 0;             /* Root directory trong FAT32 */
-    fat_config.total_clusters = 0;               /* Sẽ được tính toán */
-    fat_config.first_data_sector = 0;            /* Sẽ được tính toán */
-    fat_config.base_addr = 0;                    /* Không sử dụng base address */
-    fat_config.irq_num = 0;                      /* Không sử dụng IRQ */
-    fat_config.use_dma = false;                  /* Không sử dụng DMA */
 
-    if (fat_init(&fat_config) != STATUS_SUCCESS) {
-        log_error("Failed to initialize FAT driver");
-        return MID_ERROR;
+    /* Thiết lập các thông số cơ bản */
+    fat_config.sectors_per_cluster = 1;    /* 1 sector/cluster */
+    fat_config.first_data_sector = 2;      /* Sector dữ liệu bắt đầu từ sector 2 */
+    fat_config.total_clusters = 1000;      /* Tổng số cluster */
+    fat_config.reserved_sectors = 1;       /* 1 sector dành riêng */
+    fat_config.root_dir_sectors = 32;      /* 32 sector cho thư mục gốc */
+    fat_config.mount_mode = FAT_MOUNT_READ_WRITE; /* Chế độ đọc/ghi */
+
+    /* Khởi tạo FAT driver */
+    int32_t status = fat_init(&fat_config);
+    if (status != STATUS_SUCCESS) {
+        return status;
     }
 
-    return MID_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int32_t mid_deinit(void)

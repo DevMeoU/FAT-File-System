@@ -29,7 +29,7 @@ int32_t fat_read_boot_sector(void);
 int32_t fat_validate_boot_sector(void);
 int32_t fat_init_fat_tables(void);
 uint32_t get_fat_size(const fat_boot_sector_t *boot_sector);
-void calculate_layout(const fat_boot_sector_t *boot_sector);
+int32_t calculate_layout(const fat_boot_sector_t *boot_sector);
 
 /* Private functions from fat_driver.c */
 static int32_t read_sector(uint32_t sector, uint8_t *buffer);
@@ -62,13 +62,23 @@ int32_t fat_init(const fat_config_t *config)
     if (config == NULL) {
         return STATUS_INVALID;
     }
-
+    
+    /* Kiểm tra chế độ mount hợp lệ */
+    if (!(config->mount_mode & (FAT_MOUNT_READ_ONLY | FAT_MOUNT_READ_WRITE))) {
+        return STATUS_INVALID;
+    }
+    
     /* Initialize context */
     memset(&fat_ctx, 0, sizeof(fat_context_t));
     memset(&path_ctx, 0, sizeof(path_ctx));
 
     /* Copy configuration */
-    memcpy(&fat_ctx.config, config, sizeof(fat_config_t));
+    fat_ctx.config.sectors_per_cluster = config->sectors_per_cluster;
+    fat_ctx.config.first_data_sector = config->first_data_sector;
+    fat_ctx.config.total_clusters = config->total_clusters;
+    fat_ctx.config.reserved_sectors = config->reserved_sectors;
+    fat_ctx.config.root_dir_sectors = config->root_dir_sectors;
+    fat_ctx.mount_mode = config->mount_mode;
 
     /* Initialize storage */
     int32_t status = fat_init_storage();
@@ -81,15 +91,18 @@ int32_t fat_init(const fat_config_t *config)
     if (status != STATUS_SUCCESS) {
         return status;
     }
-
+    
     /* Validate boot sector */
     status = fat_validate_boot_sector();
     if (status != STATUS_SUCCESS) {
         return status;
     }
-
+    
     /* Calculate layout */
-    calculate_layout(&boot_sector);
+    status = calculate_layout(&boot_sector);
+    if (status != STATUS_SUCCESS) {
+        return status;
+    }
 
     /* Initialize FAT tables */
     status = fat_init_fat_tables();
@@ -102,7 +115,7 @@ int32_t fat_init(const fat_config_t *config)
     if (status != STATUS_SUCCESS) {
         return status;
     }
-
+    
     return STATUS_SUCCESS;
 }
 
@@ -200,7 +213,7 @@ int32_t fat_read(fat_file_t *file, void *buffer, uint32_t size, uint32_t *bytes_
     }
 
     /* Initialize bytes read */
-    *bytes_read = 0;
+        *bytes_read = 0;
 
     /* Check if we've reached the end of file */
     if (file->position >= file->info.size) {
@@ -221,9 +234,9 @@ int32_t fat_read(fat_file_t *file, void *buffer, uint32_t size, uint32_t *bytes_
         /* Read sector if needed */
         if (file->offset == 0) {
             int32_t status = fat_read_sector(file->sector, file->sector_buffer);
-            if (status != STATUS_SUCCESS) {
-                return status;
-            }
+        if (status != STATUS_SUCCESS) {
+            return status;
+        }
         }
 
         /* Calculate how many bytes we can read from current sector */
@@ -278,6 +291,11 @@ int32_t fat_write(fat_file_t *file, const void *buffer, uint32_t size, uint32_t 
         return STATUS_INVALID;
     }
 
+    /* Check mount mode */
+    if (fat_ctx.mount_mode & FAT_MOUNT_READ_ONLY) {
+        return STATUS_READ_ONLY;
+    }
+
     /* Initialize bytes written */
     *bytes_written = 0;
 
@@ -289,9 +307,9 @@ int32_t fat_write(fat_file_t *file, const void *buffer, uint32_t size, uint32_t 
         /* Read sector if needed */
         if (file->offset == 0) {
             int32_t status = fat_read_sector(file->sector, file->sector_buffer);
-            if (status != STATUS_SUCCESS) {
-                return status;
-            }
+        if (status != STATUS_SUCCESS) {
+            return status;
+        }
         }
 
         /* Calculate how many bytes we can write to current sector */
@@ -311,9 +329,9 @@ int32_t fat_write(fat_file_t *file, const void *buffer, uint32_t size, uint32_t 
         /* Write sector if it's full */
         if (file->offset >= FAT_SECTOR_SIZE) {
             int32_t status = fat_write_sector(file->sector, file->sector_buffer);
-            if (status != STATUS_SUCCESS) {
-                return status;
-            }
+        if (status != STATUS_SUCCESS) {
+            return status;
+        }
 
             file->offset = 0;
             file->sector++;
@@ -415,7 +433,7 @@ int32_t fat_seek(fat_file_t *file, int32_t offset, int32_t origin)
         }
 
         if (next_cluster >= FAT_EOC(fat_type)) {
-            return STATUS_INVALID;
+                return STATUS_INVALID;
         }
 
         new_cluster = next_cluster;
@@ -447,6 +465,11 @@ int32_t fat_unlink(const char *path)
         return STATUS_INVALID;
     }
 
+    /* Check mount mode */
+    if (fat_ctx.mount_mode & FAT_MOUNT_READ_ONLY) {
+        return STATUS_READ_ONLY;
+    }
+
     /* Find file entry */
     fat_dir_entry_t entry;
     int32_t status = fat_find_file(path, &entry);
@@ -464,9 +487,9 @@ int32_t fat_unlink(const char *path)
     while (cluster < FAT_EOC(fat_type)) {
         uint32_t next_cluster;
         status = fat_read_fat_entry(cluster, &next_cluster);
-        if (status != STATUS_SUCCESS) {
-            return status;
-        }
+    if (status != STATUS_SUCCESS) {
+        return status;
+    }
 
         status = fat_free_cluster(cluster);
         if (status != STATUS_SUCCESS) {
@@ -487,6 +510,11 @@ int32_t fat_mkdir(const char *path)
         return STATUS_INVALID;
     }
 
+    /* Check mount mode */
+    if (fat_ctx.mount_mode & FAT_MOUNT_READ_ONLY) {
+        return STATUS_READ_ONLY;
+    }
+
     /* Check if directory already exists */
     fat_dir_entry_t entry;
     int32_t status = fat_find_file(path, &entry);
@@ -502,7 +530,7 @@ int32_t fat_mkdir(const char *path)
     entry.file_size = 0;
     entry.last_write_date = fat_get_date();
     entry.last_write_time = fat_get_time();
-
+    
     /* Convert path to short name */
     char short_name[12];
     status = fat_convert_to_short_name(path, short_name);
@@ -538,6 +566,11 @@ int32_t fat_rmdir(const char *path)
         return STATUS_INVALID;
     }
 
+    /* Check mount mode */
+    if (fat_ctx.mount_mode & FAT_MOUNT_READ_ONLY) {
+        return STATUS_READ_ONLY;
+    }
+
     /* Find directory entry */
     fat_dir_entry_t entry;
     int32_t status = fat_find_file(path, &entry);
@@ -559,9 +592,9 @@ int32_t fat_rmdir(const char *path)
         uint32_t sector = fat_cluster_to_sector(cluster);
         for (uint32_t i = 0; i < fat_ctx.config.sectors_per_cluster; i++) {
             status = fat_read_sector(sector + i, sector_buffer);
-            if (status != STATUS_SUCCESS) {
-                return status;
-            }
+    if (status != STATUS_SUCCESS) {
+        return status;
+    }
 
             fat_dir_entry_t *dir_entry = (fat_dir_entry_t *)sector_buffer;
             for (uint32_t j = 0; j < FAT_SECTOR_SIZE / sizeof(fat_dir_entry_t); j++) {
@@ -580,7 +613,7 @@ int32_t fat_rmdir(const char *path)
             break;
         }
 
-        uint32_t next_cluster;
+    uint32_t next_cluster;
         status = fat_read_fat_entry(cluster, &next_cluster);
         if (status != STATUS_SUCCESS) {
             return status;
@@ -619,7 +652,7 @@ int32_t fat_rmdir(const char *path)
  * Private Function Implementations
  *********************************************************************/
 
-static int32_t read_sector(uint32_t sector, uint8_t *buffer)
+static inline int32_t read_sector(uint32_t sector, uint8_t *buffer)
 {
     if (!buffer) {
         return STATUS_INVALID;
@@ -692,7 +725,7 @@ static int32_t is_directory(const fat_dir_entry_t *entry)
     return (entry->attributes & FAT_ATTR_DIRECTORY) != 0;
 }
 
-static int32_t list_directory(const char *path)
+static inline int32_t list_directory(const char *path)
 {
     if (path == NULL) {
         return STATUS_INVALID;
@@ -754,7 +787,7 @@ static int32_t list_directory(const char *path)
     return STATUS_SUCCESS;
 }
 
-static int32_t change_directory(const char *path)
+static inline int32_t change_directory(const char *path)
 {
     if (path == NULL) {
         return STATUS_INVALID;
@@ -776,7 +809,7 @@ static int32_t change_directory(const char *path)
     return update_path_context(path, (entry.first_cluster_hi << 16) | entry.first_cluster_lo);
 }
 
-static int32_t resolve_path(const char *path, char *resolved_path)
+static inline int32_t resolve_path(const char *path, char *resolved_path)
 {
     if (path == NULL || resolved_path == NULL) {
         return STATUS_INVALID;
@@ -801,7 +834,7 @@ static int32_t resolve_path(const char *path, char *resolved_path)
     return STATUS_SUCCESS;
 }
 
-static int32_t normalize_path(const char *path, char *normalized_path)
+static inline int32_t normalize_path(const char *path, char *normalized_path)
 {
     if (path == NULL || normalized_path == NULL) {
         return STATUS_INVALID;
@@ -913,4 +946,4 @@ static int32_t update_path_context(const char *new_path, uint32_t new_cluster)
 
 /*********************************************************************
  * UUID: 2b8c3e2d-1a4f-4e85-9c6d-f8b2e3a1d5c9
- *********************************************************************/ 
+ *********************************************************************/

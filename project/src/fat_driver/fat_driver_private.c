@@ -28,8 +28,14 @@
 static int32_t read_sector(uint32_t sector, uint8_t *buffer);
 static int32_t write_sector(uint32_t sector, const uint8_t *buffer);
 static uint8_t fat_calculate_short_name_checksum(const char *short_name);
-void calculate_layout(const fat_boot_sector_t *boot_sector);
-static uint32_t get_fat_size(const fat_boot_sector_t *boot_sector);
+int32_t calculate_layout(const fat_boot_sector_t *boot_sector);
+uint32_t get_fat_size(const fat_boot_sector_t *boot_sector);
+int32_t fat_find_file(const char *path, fat_dir_entry_t *entry);
+int32_t fat_create_file(const char *path, fat_dir_entry_t *entry);
+int32_t fat_write_dir_entry(const fat_dir_entry_t *entry);
+uint32_t fat_alloc_cluster(void);
+int32_t fat_deinit(void);
+int32_t fat_free_cluster(uint32_t cluster);
 
 /*********************************************************************
  * Private Variables
@@ -211,7 +217,7 @@ static uint8_t fat_calculate_short_name_checksum(const char *short_name)
     return sum;
 }
 
-void calculate_layout(const fat_boot_sector_t *boot_sector)
+int32_t calculate_layout(const fat_boot_sector_t *boot_sector)
 {
     /* Calculate sectors per cluster */
     fat_ctx.config.sectors_per_cluster = boot_sector->sectors_per_cluster;
@@ -235,9 +241,18 @@ void calculate_layout(const fat_boot_sector_t *boot_sector)
     }
     fat_ctx.config.total_clusters = (total_sectors - fat_ctx.config.first_data_sector) /
                                    fat_ctx.config.sectors_per_cluster;
+
+    /* Set FAT start and size */
+    fat_ctx.fat_start = boot_sector->reserved_sectors;
+    fat_ctx.fat_size = get_fat_size(boot_sector);
+
+    /* Set root cluster */
+    fat_ctx.root_cluster = boot_sector->root_cluster;
+
+    return STATUS_SUCCESS;
 }
 
-static uint32_t get_fat_size(const fat_boot_sector_t *boot_sector)
+uint32_t get_fat_size(const fat_boot_sector_t *boot_sector)
 {
     uint32_t total_sectors = boot_sector->total_sectors_16;
     if (total_sectors == 0) {
@@ -360,7 +375,6 @@ int32_t fat_write_fat_entry(uint32_t cluster, uint32_t next_cluster)
 
 int32_t fat_find_free_cluster(uint32_t *cluster)
 {
-    uint8_t buffer[FAT_SECTOR_SIZE];
     int32_t ret;
 
     /* Start from cluster 2 */
@@ -470,16 +484,16 @@ uint32_t fat_alloc_cluster(void)
     return 0;
 }
 
-int32_t fat_free_cluster(uint32_t cluster)
-{
-    /* TODO: Implement cluster freeing */
-    return STATUS_SUCCESS;
-}
-
 int32_t fat_deinit(void)
 {
     /* TODO: Implement deinitialization */
     return STATUS_SUCCESS;
+}
+
+int32_t fat_free_cluster(uint32_t cluster)
+{
+    /* Mark cluster as free */
+    return fat_write_fat_entry(cluster, 0);
 }
 
 /*********************************************************************

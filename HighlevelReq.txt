@@ -1,5 +1,51 @@
 Yêu cầu:
-Khi mount file system, nếu file system không hợp lệ, chương trình sẽ hiển thị thông báo lỗi và thoát.
+Mount file system:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - 2 file name max: 255
+
+Tầng Application:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - Truyền vào file path phải là img file
+    - Truyền vào mode phải là read only hoặc read write
+
+Tầng Middleware:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - 2 file name max: 255
+
+Tầng FAT driver:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - Kiểm tra thông số truyền vào
+    - Mount file system
+    - Mount mode: read only, read write
+    - Gọi tới HAL để đọc boot sector
+    - Lấy thông số từ HAL
+    - Tính toán các thông số cần thiết
+    - Tính toán các bảng FAT
+    - Tính toán các bảng root directory
+    - Tính toán các bảng file directory
+    - Tính toán các bảng file data
+
+
 Nếu path không tồn tại, chương trình sẽ hiển thị thông báo lỗi và thoát.
 Nếu path không phải là img file, chương trình sẽ hiển thị thông báo lỗi và thoát.
 Nếu mount thành công, chương trình sẽ hiển thị thông báo và chuyển sang chế độ shell.

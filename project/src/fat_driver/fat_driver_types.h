@@ -176,28 +176,36 @@ struct fat_boot_sector {
 };
 typedef struct fat_boot_sector fat_boot_sector_t;
 
-/* FAT Context */
-typedef struct {
-    fat_config_internal_t config;     /* File system configuration */
-    fat_cache_entry_t cache[FAT_CACHE_SIZE]; /* Sector cache */
-    uint32_t fat_size;               /* FAT size in sectors */
-    uint32_t fat_start;              /* First FAT sector */
-    uint32_t root_cluster;           /* Root directory cluster */
-} fat_context_t;
+/* Mount modes */
+#define FAT_MOUNT_READ_ONLY    0x01
+#define FAT_MOUNT_READ_WRITE   0x02
 
-/* FAT Configuration */
+/* FAT configuration structure */
 typedef struct {
-    char file_path[256];      /* File path */
-    uint32_t base_addr;       /* Base address */
-    uint32_t irq_num;         /* IRQ number */
-    bool use_dma;             /* Use DMA flag */
-    fat_type_t fat_type;      /* FAT type */
-    uint32_t sectors_per_cluster; /* Sectors per cluster */
-    uint32_t first_data_sector;   /* First data sector */
-    uint32_t total_clusters;      /* Total number of clusters */
-    uint32_t reserved_sectors;    /* Reserved sectors */
-    uint32_t root_dir_sectors;    /* Root directory sectors */
+    uint32_t sectors_per_cluster;    /* Số sector trên mỗi cluster */
+    uint32_t first_data_sector;      /* Sector đầu tiên chứa dữ liệu */
+    uint32_t total_clusters;         /* Tổng số cluster */
+    uint32_t reserved_sectors;       /* Số sector được dành riêng */
+    uint32_t root_dir_sectors;       /* Số sector cho thư mục gốc */
+    uint8_t mount_mode;              /* Chế độ mount (read-only/read-write) */
 } fat_config_t;
+
+/* FAT context structure */
+typedef struct {
+    fat_config_t config;           /* FAT configuration */
+    fat_boot_sector_t boot_sector; /* Boot sector data */
+    fat_type_t fat_type;          /* FAT type (12/16/32) */
+    uint32_t fat_start;           /* First FAT sector */
+    uint32_t fat_size;            /* Size of FAT in sectors */
+    uint32_t root_cluster;        /* Root directory cluster */
+    uint8_t mount_mode;           /* Mount mode (read-only/read-write) */
+    struct {
+        bool valid;               /* Cache entry valid */
+        bool dirty;               /* Cache entry modified */
+        uint32_t sector;          /* Sector number */
+        uint8_t data[FAT_SECTOR_SIZE]; /* Sector data */
+    } cache[FAT_CACHE_SIZE];      /* Sector cache */
+} fat_context_t;
 
 #endif /* FAT_DRIVER_TYPES_H */
 
