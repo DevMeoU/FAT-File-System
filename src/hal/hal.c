@@ -14,268 +14,192 @@
 #include <stdlib.h>
 #include "../common/common_types.h"
 #include "hal.h"
-#include "hal_private.h"
 #include "../ip_driver/ip_driver.h"
 
 /*********************************************************************
  * Private Variables
  *********************************************************************/
 static bool hal_initialized = false;
-static hal_context_t hal_ctx;
-static hal_status_t hal_status;
-static hal_transfer_mode_t transfer_mode = HAL_MODE_POLLING;
+static hal_config_t hal_config;
+static uint32_t sector_size = 0;
 
 /*********************************************************************
  * Public Function Implementations
  *********************************************************************/
 
-int32_t hal_init(hal_config_t *config)
-{
-    if (!config || !config->driver) {
+int32_t hal_init(hal_config_t* config) {
+    if (!config || !config->cache_size || !config->ip_config.img_path || !config->ip_config.sector_size) {
         return HAL_ERROR_INVALID;
-    }
-
-    /* Copy configuration */
-    memcpy(&hal_ctx.config, config, sizeof(hal_config_t));
-
-    /* Initialize cache */
-    hal_ctx.cache_buffer = (uint8_t *)malloc(config->sector_size * config->cache_size);
-    if (!hal_ctx.cache_buffer) {
-        return HAL_ERROR_IO;
     }
 
     /* Initialize IP driver */
-    int32_t status = ip_driver_init(config->driver);
-    if (status != IP_SUCCESS) {
-        free(hal_ctx.cache_buffer);
-        hal_ctx.cache_buffer = NULL;
+    int32_t status = ip_driver_init(&config->ip_config);
+    if (status != IP_ERROR_SUCCESS) {
         return HAL_ERROR_IO;
     }
+
+    /* Save configuration */
+    memcpy(&hal_config, config, sizeof(hal_config_t));
+    sector_size = config->ip_config.sector_size;
+
+    /* Allocate cache */
+    hal_config.cache_buffer = (uint8_t*)malloc(sector_size * config->cache_size);
+    hal_config.cache_map = (uint32_t*)malloc(sizeof(uint32_t) * config->cache_size);
+    hal_config.dirty_flags = (uint8_t*)malloc(config->cache_size);
+
+    if (!hal_config.cache_buffer || !hal_config.cache_map || !hal_config.dirty_flags) {
+        hal_deinit();
+        return HAL_ERROR_IO;
+    }
+
+    /* Initialize cache */
+    memset(hal_config.cache_buffer, 0, sector_size * config->cache_size);
+    memset(hal_config.cache_map, 0xFF, sizeof(uint32_t) * config->cache_size);
+    memset(hal_config.dirty_flags, 0, config->cache_size);
 
     hal_initialized = true;
-    return HAL_ERROR_SUCCESS;
+    return HAL_SUCCESS;
 }
 
-int32_t hal_deinit(void)
-{
+int32_t hal_deinit(void) {
     if (!hal_initialized) {
-        return HAL_ERROR_SUCCESS;
+        return HAL_SUCCESS;
     }
 
-    /* Close IP driver */
-    int32_t status = ip_driver_deinit();
-    if (status != IP_SUCCESS) {
-        return HAL_ERROR_IO;
-    }
+    /* Sync cache */
+    hal_sync();
 
     /* Free cache */
-    if (hal_ctx.cache_buffer) {
-        free(hal_ctx.cache_buffer);
-        hal_ctx.cache_buffer = NULL;
+    if (hal_config.cache_buffer) {
+        free(hal_config.cache_buffer);
+        hal_config.cache_buffer = NULL;
+    }
+    if (hal_config.cache_map) {
+        free(hal_config.cache_map);
+        hal_config.cache_map = NULL;
+    }
+    if (hal_config.dirty_flags) {
+        free(hal_config.dirty_flags);
+        hal_config.dirty_flags = NULL;
     }
 
-    /* Reset context */
-    memset(&hal_ctx, 0, sizeof(hal_context_t));
-    memset(&hal_status, 0, sizeof(hal_status_t));
-    hal_initialized = false;
+    /* Deinitialize IP driver */
+    ip_driver_deinit();
 
-    return HAL_ERROR_SUCCESS;
+    hal_initialized = false;
+    return HAL_SUCCESS;
 }
 
-int32_t hal_read_sector(uint32_t sector_number, uint8_t *buffer)
-{
+int32_t hal_read_sector(uint32_t sector_number, uint8_t* buffer) {
     if (!buffer) {
         return HAL_ERROR_INVALID;
+    }
+
+    if (!hal_initialized) {
+        return HAL_ERROR_NOT_READY;
     }
 
     /* Check cache */
-    uint32_t cache_index = sector_number % hal_ctx.config.cache_size;
-    uint8_t *cache_entry = hal_ctx.cache_buffer + (cache_index * hal_ctx.config.sector_size);
+    for (uint32_t i = 0; i < hal_config.cache_size; i++) {
+        if (hal_config.cache_map[i] == sector_number) {
+            /* Cache hit */
+            memcpy(buffer, hal_config.cache_buffer + (i * sector_size), sector_size);
+            return HAL_SUCCESS;
+        }
+    }
 
-    /* Read from IP driver */
-    int32_t status = ip_driver_read_sector(hal_ctx.config.driver, sector_number, cache_entry);
-    if (status != IP_SUCCESS) {
+    /* Cache miss - find empty or LRU slot */
+    uint32_t slot = 0;
+    for (uint32_t i = 0; i < hal_config.cache_size; i++) {
+        if (hal_config.cache_map[i] == 0xFFFFFFFF) {
+            slot = i;
+            break;
+        }
+    }
+
+    /* Write back dirty sector */
+    if (hal_config.dirty_flags[slot]) {
+        int32_t status = ip_driver_write_sector(hal_config.cache_map[slot], 
+                                              hal_config.cache_buffer + (slot * sector_size));
+        if (status != IP_ERROR_SUCCESS) {
+            return HAL_ERROR_IO;
+        }
+        hal_config.dirty_flags[slot] = 0;
+    }
+
+    /* Read new sector */
+    int32_t status = ip_driver_read_sector(sector_number, 
+                                         hal_config.cache_buffer + (slot * sector_size));
+    if (status != IP_ERROR_SUCCESS) {
         return HAL_ERROR_IO;
     }
 
-    /* Copy to buffer */
-    memcpy(buffer, cache_entry, hal_ctx.config.sector_size);
-    return HAL_ERROR_SUCCESS;
+    /* Update cache */
+    hal_config.cache_map[slot] = sector_number;
+    memcpy(buffer, hal_config.cache_buffer + (slot * sector_size), sector_size);
+
+    return HAL_SUCCESS;
 }
 
-int32_t hal_write_sector(uint32_t sector_number, const uint8_t *buffer)
-{
+int32_t hal_write_sector(uint32_t sector_number, const uint8_t* buffer) {
     if (!buffer) {
         return HAL_ERROR_INVALID;
     }
 
-    /* Update cache */
-    uint32_t cache_index = sector_number % hal_ctx.config.cache_size;
-    uint8_t *cache_entry = hal_ctx.cache_buffer + (cache_index * hal_ctx.config.sector_size);
-    memcpy(cache_entry, buffer, hal_ctx.config.sector_size);
-
-    /* Write to IP driver */
-    int32_t status = ip_driver_write_sector(hal_ctx.config.driver, sector_number, buffer);
-    if (status != IP_SUCCESS) {
-        return HAL_ERROR_IO;
-    }
-
-    return HAL_ERROR_SUCCESS;
-}
-
-int32_t hal_sync(void)
-{
     if (!hal_initialized) {
-        return HAL_ERROR_INVALID;
+        return HAL_ERROR_NOT_READY;
     }
 
-    /* Flush cache */
-    for (uint32_t i = 0; i < hal_ctx.config.cache_size; i++) {
-        uint8_t *cache_entry = hal_ctx.cache_buffer + (i * hal_ctx.config.sector_size);
-        int32_t status = ip_driver_write_sector(hal_ctx.config.driver, i, cache_entry);
-        if (status != IP_SUCCESS) {
+    /* Find cache slot */
+    uint32_t slot = 0;
+    bool found = false;
+
+    for (uint32_t i = 0; i < hal_config.cache_size; i++) {
+        if (hal_config.cache_map[i] == sector_number) {
+            slot = i;
+            found = true;
+            break;
+        }
+        if (hal_config.cache_map[i] == 0xFFFFFFFF) {
+            slot = i;
+        }
+    }
+
+    /* Write back dirty sector if needed */
+    if (!found && hal_config.dirty_flags[slot]) {
+        int32_t status = ip_driver_write_sector(hal_config.cache_map[slot],
+                                              hal_config.cache_buffer + (slot * sector_size));
+        if (status != IP_ERROR_SUCCESS) {
             return HAL_ERROR_IO;
         }
     }
 
-    return HAL_ERROR_SUCCESS;
+    /* Update cache */
+    memcpy(hal_config.cache_buffer + (slot * sector_size), buffer, sector_size);
+    hal_config.cache_map[slot] = sector_number;
+    hal_config.dirty_flags[slot] = 1;
+
+    return HAL_SUCCESS;
 }
 
-int32_t hal_read(void *buffer, uint32_t size, uint32_t timeout)
-{
-    if (!buffer || size == 0 || size > HAL_MAX_BUFFER_SIZE || 
-        timeout < HAL_MIN_TIMEOUT || timeout > HAL_MAX_TIMEOUT) {
-        return STATUS_INVALID_PARAMETER;
+int32_t hal_sync(void) {
+    if (!hal_initialized) {
+        return HAL_ERROR_NOT_READY;
     }
 
-    if (!hal_status.is_initialized) {
-        return STATUS_NOT_READY;
-    }
-
-    if (hal_status.is_busy) {
-        return STATUS_BUSY;
-    }
-
-    hal_status.is_busy = true;
-    hal_status.transfer_count++;
-
-    // TODO: Implement actual read based on transfer mode
-
-    hal_status.is_busy = false;
-    return STATUS_SUCCESS;
-}
-
-int32_t hal_write(const void *buffer, uint32_t size, uint32_t timeout)
-{
-    if (!buffer || size == 0 || size > HAL_MAX_BUFFER_SIZE ||
-        timeout < HAL_MIN_TIMEOUT || timeout > HAL_MAX_TIMEOUT) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if (!hal_status.is_initialized) {
-        return STATUS_NOT_READY;
-    }
-
-    if (hal_status.is_busy) {
-        return STATUS_BUSY;
-    }
-
-    hal_status.is_busy = true;
-    hal_status.transfer_count++;
-
-    // TODO: Implement actual write based on transfer mode
-
-    hal_status.is_busy = false;
-    return STATUS_SUCCESS;
-}
-
-int32_t hal_register_callback(void (*callback)(void *), uint32_t event_id)
-{
-    (void)event_id; // Unused parameter
-    if (!callback) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    // Tìm slot trống
-    for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
-        if (hal_ctx.callbacks[i].callback == NULL) {
-            hal_ctx.callbacks[i].callback = callback;
-            hal_ctx.callbacks[i].param = NULL;
-            return STATUS_SUCCESS;
+    /* Write back all dirty sectors */
+    for (uint32_t i = 0; i < hal_config.cache_size; i++) {
+        if (hal_config.dirty_flags[i] && hal_config.cache_map[i] != 0xFFFFFFFF) {
+            int32_t status = ip_driver_write_sector(hal_config.cache_map[i],
+                                                  hal_config.cache_buffer + (i * sector_size));
+            if (status != IP_ERROR_SUCCESS) {
+                return HAL_ERROR_IO;
+            }
+            hal_config.dirty_flags[i] = 0;
         }
     }
 
-    return STATUS_ERROR;
-}
-
-int32_t hal_unregister_callback(uint32_t event_id)
-{
-    (void)event_id; // Unused parameter
-    // Tìm callback cần xóa
-    for (uint32_t i = 0; i < HAL_MAX_CALLBACKS; i++) {
-        if (hal_ctx.callbacks[i].callback != NULL) {
-            hal_ctx.callbacks[i].callback = NULL;
-            hal_ctx.callbacks[i].param = NULL;
-            return STATUS_SUCCESS;
-        }
-    }
-
-    return STATUS_ERROR;
-}
-
-int32_t hal_set_transfer_mode(hal_transfer_mode_t mode)
-{
-    if (mode > HAL_MODE_DMA) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    transfer_mode = mode;
-    return STATUS_SUCCESS;
-}
-
-int32_t hal_get_device_info(hal_device_info_t *info)
-{
-    if (!info) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if (!hal_status.is_initialized) {
-        return STATUS_NOT_READY;
-    }
-
-    // TODO: Get actual device info
-    info->device_id = 0;
-    info->manufacturer_id = 0;
-    info->version = 0;
-    info->capabilities = 0;
-
-    return STATUS_SUCCESS;
-}
-
-int32_t hal_get_status(hal_status_t *status)
-{
-    if (!status) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    memcpy(status, &hal_status, sizeof(hal_status_t));
-    return STATUS_SUCCESS;
-}
-
-int32_t hal_reset(void)
-{
-    if (!hal_status.is_initialized) {
-        return STATUS_NOT_READY;
-    }
-
-    // Reset status
-    memset(&hal_status, 0, sizeof(hal_status_t));
-    hal_status.is_initialized = true;
-
-    // Reset transfer mode
-    transfer_mode = HAL_MODE_POLLING;
-
-    return STATUS_SUCCESS;
+    return HAL_SUCCESS;
 }
 
 /*********************************************************************

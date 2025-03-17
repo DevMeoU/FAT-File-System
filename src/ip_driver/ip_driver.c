@@ -2,8 +2,8 @@
  * ✨ Author: Ducson9112k 🌟
  * 
  * Description:
- *   File triển khai các hàm public của module IP Driver.
- *   Các hàm này được sử dụng bởi các module khác.
+ *   File triển khai các hàm của module IP driver.
+ *   Module này cung cấp các hàm cơ bản để tương tác với thiết bị.
  *********************************************************************/
 
 /*********************************************************************
@@ -19,8 +19,7 @@
 /*********************************************************************
  * Private Variables
  *********************************************************************/
-static bool ip_initialized = false;  /* IP driver initialization state */
-static ip_context_t ip_ctx;  /* IP driver context */
+static ip_context_t ip_ctx;
 
 /*********************************************************************
  * Public Function Implementations
@@ -40,7 +39,7 @@ static ip_context_t ip_ctx;  /* IP driver context */
  */
 int32_t ip_driver_init(ip_config_t *config)
 {
-    if (!config) {
+    if (config == NULL) {
         return IP_ERROR_INVALID;
     }
 
@@ -48,14 +47,13 @@ int32_t ip_driver_init(ip_config_t *config)
     memset(&ip_ctx, 0, sizeof(ip_context_t));
     memcpy(&ip_ctx.config, config, sizeof(ip_config_t));
 
-    /* Initialize private context */
+    /* Initialize IP driver */
     int32_t status = ip_driver_private_init(&ip_ctx);
-    if (status != IP_ERROR_SUCCESS) {
+    if (status != IP_SUCCESS) {
         return status;
     }
 
-    ip_initialized = true;
-    return IP_ERROR_SUCCESS;
+    return IP_SUCCESS;
 }
 
 /**
@@ -70,18 +68,16 @@ int32_t ip_driver_init(ip_config_t *config)
  */
 int32_t ip_driver_deinit(void)
 {
-    if (!ip_initialized) {
-        return IP_ERROR_SUCCESS;
-    }
-
-    /* Deinitialize private context */
+    /* Deinitialize IP driver */
     int32_t status = ip_driver_private_deinit(&ip_ctx);
-    if (status != IP_ERROR_SUCCESS) {
+    if (status != IP_SUCCESS) {
         return status;
     }
 
-    ip_initialized = false;
-    return IP_ERROR_SUCCESS;
+    /* Clear context */
+    memset(&ip_ctx, 0, sizeof(ip_context_t));
+
+    return IP_SUCCESS;
 }
 
 /**
@@ -96,17 +92,19 @@ int32_t ip_driver_deinit(void)
  * @param buffer Buffer to store sector data
  * @return int32_t IP_ERROR_SUCCESS on success, error code otherwise
  */
-int32_t ip_driver_read_sector(uint32_t sector_number, uint8_t *buffer)
+int32_t ip_driver_read_sector(uint32_t sector_num, uint8_t *buffer)
 {
-    if (!buffer) {
+    if (buffer == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ip_initialized) {
-        return IP_ERROR_NOT_READY;
+    /* Read sector */
+    int32_t status = ip_driver_private_read_sector(&ip_ctx, sector_num, buffer);
+    if (status != IP_SUCCESS) {
+        return status;
     }
 
-    return ip_driver_private_read_sector(&ip_ctx, sector_number, buffer);
+    return IP_SUCCESS;
 }
 
 /**
@@ -121,17 +119,19 @@ int32_t ip_driver_read_sector(uint32_t sector_number, uint8_t *buffer)
  * @param buffer Buffer containing sector data
  * @return int32_t IP_ERROR_SUCCESS on success, error code otherwise
  */
-int32_t ip_driver_write_sector(uint32_t sector_number, const uint8_t *buffer)
+int32_t ip_driver_write_sector(uint32_t sector_num, const uint8_t *buffer)
 {
-    if (!buffer) {
+    if (buffer == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ip_initialized) {
-        return IP_ERROR_NOT_READY;
+    /* Write sector */
+    int32_t status = ip_driver_private_write_sector(&ip_ctx, sector_num, buffer);
+    if (status != IP_SUCCESS) {
+        return status;
     }
 
-    return ip_driver_private_write_sector(&ip_ctx, sector_number, buffer);
+    return IP_SUCCESS;
 }
 
 /**
@@ -147,15 +147,17 @@ int32_t ip_driver_write_sector(uint32_t sector_number, const uint8_t *buffer)
  */
 int32_t ip_driver_get_device_info(ip_device_info_t *info)
 {
-    if (!info) {
+    if (info == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ip_initialized) {
-        return IP_ERROR_NOT_READY;
+    /* Get device info */
+    int32_t status = ip_driver_private_get_device_info(&ip_ctx, info);
+    if (status != IP_SUCCESS) {
+        return status;
     }
 
-    return ip_driver_private_get_device_info(&ip_ctx, info);
+    return IP_SUCCESS;
 }
 
 /**
@@ -169,13 +171,95 @@ int32_t ip_driver_get_device_info(ip_device_info_t *info)
  */
 int32_t ip_driver_reset(void)
 {
-    if (!ip_initialized) {
-        return IP_ERROR_NOT_READY;
+    /* Reset IP driver */
+    int32_t status = ip_driver_private_reset(&ip_ctx);
+    if (status != IP_SUCCESS) {
+        return status;
     }
 
-    return ip_driver_private_reset(&ip_ctx);
+    return IP_SUCCESS;
 }
 
 /*********************************************************************
- * UUID: 4f8d2e1c-9b4a-4e85-8c6d-f7b2e3a1d5c9
+ * Module IP Driver - Triển khai các hàm I/O cấp thấp
  *********************************************************************/
+
+/* Khởi tạo IP Driver */
+int ip_init(IpControl* ip_ctrl, const char* img_path, uint32_t sector_size) {
+    if (!ip_ctrl || !img_path || sector_size == 0) {
+        return IP_ERROR_IO;
+    }
+
+    // Mở file img
+    ip_ctrl->fp = fopen(img_path, "rb+");
+    if (!ip_ctrl->fp) {
+        return IP_ERROR_IO;
+    }
+
+    // Lưu thông tin
+    ip_ctrl->img_path = strdup(img_path);
+    ip_ctrl->sector_size = sector_size;
+
+    // Tính tổng số sector
+    fseek(ip_ctrl->fp, 0, SEEK_END);
+    long file_size = ftell(ip_ctrl->fp);
+    ip_ctrl->total_sectors = file_size / sector_size;
+
+    return IP_SUCCESS;
+}
+
+/* Đọc một sector */
+int ip_read_sector(IpControl* ip_ctrl, uint32_t sector_num, void* buffer) {
+    if (!ip_ctrl || !buffer || sector_num >= ip_ctrl->total_sectors) {
+        return IP_ERROR_IO;
+    }
+
+    // Định vị sector
+    if (fseek(ip_ctrl->fp, sector_num * ip_ctrl->sector_size, SEEK_SET) != 0) {
+        return IP_ERROR_IO;
+    }
+
+    // Đọc sector
+    size_t bytes_read = fread(buffer, 1, ip_ctrl->sector_size, ip_ctrl->fp);
+    if (bytes_read != ip_ctrl->sector_size) {
+        return IP_ERROR_IO;
+    }
+
+    return IP_SUCCESS;
+}
+
+/* Ghi một sector */
+int ip_write_sector(IpControl* ip_ctrl, uint32_t sector_num, const void* buffer) {
+    if (!ip_ctrl || !buffer || sector_num >= ip_ctrl->total_sectors) {
+        return IP_ERROR_IO;
+    }
+
+    // Định vị sector
+    if (fseek(ip_ctrl->fp, sector_num * ip_ctrl->sector_size, SEEK_SET) != 0) {
+        return IP_ERROR_IO;
+    }
+
+    // Ghi sector
+    size_t bytes_written = fwrite(buffer, 1, ip_ctrl->sector_size, ip_ctrl->fp);
+    if (bytes_written != ip_ctrl->sector_size) {
+        return IP_ERROR_IO;
+    }
+
+    // Đảm bảo dữ liệu được ghi xuống đĩa
+    fflush(ip_ctrl->fp);
+
+    return IP_SUCCESS;
+}
+
+/* Dọn dẹp */
+void ip_cleanup(IpControl* ip_ctrl) {
+    if (ip_ctrl) {
+        if (ip_ctrl->fp) {
+            fclose(ip_ctrl->fp);
+        }
+        if (ip_ctrl->img_path) {
+            free(ip_ctrl->img_path);
+        }
+        memset(ip_ctrl, 0, sizeof(IpControl));
+    }
+}

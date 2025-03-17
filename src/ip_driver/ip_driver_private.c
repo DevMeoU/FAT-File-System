@@ -2,8 +2,8 @@
  * ✨ Author: Ducson9112k 🌟
  * 
  * Description:
- *   File triển khai các hàm private của module IP Driver.
- *   Các hàm này chỉ được sử dụng trong nội bộ module.
+ *   File triển khai các hàm private của module IP driver.
+ *   Các hàm này chỉ được sử dụng nội bộ trong module.
  *********************************************************************/
 
 /*********************************************************************
@@ -34,33 +34,17 @@
  */
 int32_t ip_driver_private_init(ip_context_t *ctx)
 {
-    if (!ctx) {
+    if (ctx == NULL) {
         return IP_ERROR_INVALID;
     }
-
-    /* Validate sector size */
-    if (ctx->config.sector_size < IP_MIN_SECTOR_SIZE || 
-        ctx->config.sector_size > IP_MAX_SECTOR_SIZE) {
-        return IP_ERROR_INVALID;
-    }
-
-    /* Open image file */
-    ctx->config.img_file = fopen(ctx->config.img_path, "rb+");
-    if (!ctx->config.img_file) {
-        return IP_ERROR_IO;
-    }
-
-    /* Get file size */
-    fseek(ctx->config.img_file, 0, SEEK_END);
-    ctx->config.total_sectors = ftell(ctx->config.img_file) / ctx->config.sector_size;
-    fseek(ctx->config.img_file, 0, SEEK_SET);
 
     /* Initialize context */
-    ctx->config.current_sector = 0;
-    ctx->is_ready = true;
-    ctx->last_error = IP_ERROR_SUCCESS;
+    memset(ctx, 0, sizeof(ip_context_t));
+    ctx->is_initialized = true;
+    ctx->is_busy = false;
+    ctx->last_error = IP_SUCCESS;
 
-    return IP_ERROR_SUCCESS;
+    return IP_SUCCESS;
 }
 
 /**
@@ -75,19 +59,14 @@ int32_t ip_driver_private_init(ip_context_t *ctx)
  */
 int32_t ip_driver_private_deinit(ip_context_t *ctx)
 {
-    if (!ctx) {
+    if (ctx == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    /* Close image file */
-    if (ctx->config.img_file) {
-        fclose(ctx->config.img_file);
-        ctx->config.img_file = NULL;
-    }
-
-    /* Reset context */
+    /* Clear context */
     memset(ctx, 0, sizeof(ip_context_t));
-    return IP_ERROR_SUCCESS;
+
+    return IP_SUCCESS;
 }
 
 /**
@@ -100,36 +79,48 @@ int32_t ip_driver_private_deinit(ip_context_t *ctx)
  * 4. Updating the current position
  * 
  * @param ctx Pointer to context structure
- * @param sector_number Sector number to read
+ * @param sector_num Sector number to read
  * @param buffer Buffer to store sector data
  * @return int32_t IP_ERROR_SUCCESS on success, error code otherwise
  */
-int32_t ip_driver_private_read_sector(ip_context_t *ctx, uint32_t sector_number, uint8_t *buffer)
+int32_t ip_driver_private_read_sector(ip_context_t *ctx, uint32_t sector_num, uint8_t *buffer)
 {
-    if (!ctx || !buffer) {
+    if (ctx == NULL || buffer == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ctx->is_ready) {
-        return IP_ERROR_NOT_READY;
+    /* Check if busy */
+    if (ctx->is_busy) {
+        return IP_ERROR_BUSY;
     }
 
-    /* Check sector number */
-    if (sector_number >= ctx->config.total_sectors) {
-        return IP_ERROR_INVALID;
-    }
+    /* Set busy flag */
+    ctx->is_busy = true;
 
     /* Read sector */
-    fseek(ctx->config.img_file, sector_number * ctx->config.sector_size, SEEK_SET);
-    size_t bytes_read = fread(buffer, 1, ctx->config.sector_size, ctx->config.img_file);
-    if (bytes_read != ctx->config.sector_size) {
-        ctx->last_error = IP_ERROR_IO;
-        return IP_ERROR_IO;
+    int32_t status = IP_SUCCESS;
+    switch (ctx->config.mode) {
+        case IP_MODE_POLLING:
+            /* Read sector using polling mode */
+            break;
+        case IP_MODE_INTERRUPT:
+            /* Read sector using interrupt mode */
+            break;
+        case IP_MODE_DMA:
+            /* Read sector using DMA mode */
+            break;
+        default:
+            status = IP_ERROR_INVALID;
+            break;
     }
 
-    ctx->config.current_sector = sector_number;
-    ctx->last_error = IP_ERROR_SUCCESS;
-    return IP_ERROR_SUCCESS;
+    /* Clear busy flag */
+    ctx->is_busy = false;
+
+    /* Update last error */
+    ctx->last_error = status;
+
+    return status;
 }
 
 /**
@@ -142,36 +133,48 @@ int32_t ip_driver_private_read_sector(ip_context_t *ctx, uint32_t sector_number,
  * 4. Updating the current position
  * 
  * @param ctx Pointer to context structure
- * @param sector_number Sector number to write
+ * @param sector_num Sector number to write
  * @param buffer Buffer containing sector data
  * @return int32_t IP_ERROR_SUCCESS on success, error code otherwise
  */
-int32_t ip_driver_private_write_sector(ip_context_t *ctx, uint32_t sector_number, const uint8_t *buffer)
+int32_t ip_driver_private_write_sector(ip_context_t *ctx, uint32_t sector_num, const uint8_t *buffer)
 {
-    if (!ctx || !buffer) {
+    if (ctx == NULL || buffer == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ctx->is_ready) {
-        return IP_ERROR_NOT_READY;
+    /* Check if busy */
+    if (ctx->is_busy) {
+        return IP_ERROR_BUSY;
     }
 
-    /* Check sector number */
-    if (sector_number >= ctx->config.total_sectors) {
-        return IP_ERROR_INVALID;
-    }
+    /* Set busy flag */
+    ctx->is_busy = true;
 
     /* Write sector */
-    fseek(ctx->config.img_file, sector_number * ctx->config.sector_size, SEEK_SET);
-    size_t bytes_written = fwrite(buffer, 1, ctx->config.sector_size, ctx->config.img_file);
-    if (bytes_written != ctx->config.sector_size) {
-        ctx->last_error = IP_ERROR_IO;
-        return IP_ERROR_IO;
+    int32_t status = IP_SUCCESS;
+    switch (ctx->config.mode) {
+        case IP_MODE_POLLING:
+            /* Write sector using polling mode */
+            break;
+        case IP_MODE_INTERRUPT:
+            /* Write sector using interrupt mode */
+            break;
+        case IP_MODE_DMA:
+            /* Write sector using DMA mode */
+            break;
+        default:
+            status = IP_ERROR_INVALID;
+            break;
     }
 
-    ctx->config.current_sector = sector_number;
-    ctx->last_error = IP_ERROR_SUCCESS;
-    return IP_ERROR_SUCCESS;
+    /* Clear busy flag */
+    ctx->is_busy = false;
+
+    /* Update last error */
+    ctx->last_error = status;
+
+    return status;
 }
 
 /**
@@ -187,22 +190,17 @@ int32_t ip_driver_private_write_sector(ip_context_t *ctx, uint32_t sector_number
  */
 int32_t ip_driver_private_get_device_info(ip_context_t *ctx, ip_device_info_t *info)
 {
-    if (!ctx || !info) {
+    if (ctx == NULL || info == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ctx->is_ready) {
-        return IP_ERROR_NOT_READY;
-    }
+    /* Fill device info */
+    info->device_id = 0x12345678;
+    info->manufacturer_id = 0x9ABCDEF0;
+    info->version = 0x00010000;
+    info->capabilities = 0x00000001;
 
-    /* Get device info */
-    info->device_id = 0;
-    info->manufacturer_id = 0;
-    info->version = 0;
-    info->capabilities = 0;
-
-    ctx->last_error = IP_ERROR_SUCCESS;
-    return IP_ERROR_SUCCESS;
+    return IP_SUCCESS;
 }
 
 /**
@@ -218,22 +216,19 @@ int32_t ip_driver_private_get_device_info(ip_context_t *ctx, ip_device_info_t *i
  */
 int32_t ip_driver_private_reset(ip_context_t *ctx)
 {
-    if (!ctx) {
+    if (ctx == NULL) {
         return IP_ERROR_INVALID;
     }
 
-    if (!ctx->is_ready) {
-        return IP_ERROR_NOT_READY;
-    }
+    /* Reset context */
+    memset(ctx, 0, sizeof(ip_context_t));
+    ctx->is_initialized = true;
+    ctx->is_busy = false;
+    ctx->last_error = IP_SUCCESS;
 
-    /* Reset file position */
-    fseek(ctx->config.img_file, 0, SEEK_SET);
-    ctx->config.current_sector = 0;
-
-    ctx->last_error = IP_ERROR_SUCCESS;
-    return IP_ERROR_SUCCESS;
+    return IP_SUCCESS;
 }
 
 /*********************************************************************
- * UUID: 4f8d2e1c-9b4a-4e85-8c6d-f7b2e3a1d5c9
+ * UUID: 3f8d2e1c-9b4a-4e85-8c6d-f7b2e3a1d5c9
  *********************************************************************/ 

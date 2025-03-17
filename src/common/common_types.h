@@ -98,14 +98,12 @@ typedef enum {
  * System Configuration
  *********************************************************************/
 typedef struct {
-    FatAccessMode mode;
+    FatAccessMode access_mode;
     FatType fat_type;
     SectorSize sector_size;
     CacheSize cache_size;
-    DirNameLength dir_name_len;
-    uint16_t file_name_len;  /* Max 255 */
-    uint16_t file_name_max;  /* Max 255 */
-} SystemConfig;
+    DirNameLength dir_name_length;
+} fat_config_t;
 
 /*********************************************************************
  * Common Type Definitions
@@ -149,21 +147,6 @@ typedef struct {
     fatfs_time_t create_time;
     fatfs_time_t modify_time;
 } fat_entry_t;
-
-/* FAT Configuration */
-typedef struct {
-    FatType fat_type;
-    uint32_t sector_size;
-    uint32_t sectors_per_cluster;
-    uint32_t reserved_sectors;
-    uint32_t fat_count;
-    uint32_t root_entries;
-    uint32_t total_sectors;
-    uint32_t sectors_per_fat;
-    uint32_t root_cluster;
-    uint32_t data_sectors;
-    uint32_t cluster_count;
-} fat_config_t;
 
 /* Application Buffer Sizes */
 #define APP_PATH_BUF_SIZE    1024

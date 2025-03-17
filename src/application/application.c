@@ -1,333 +1,326 @@
 /*********************************************************************
- * ✨ Author: Ducson9112k 🌟
- * 
- * Description:
- *   Module Application cung cấp giao diện người dùng để tương tác với
- *   hệ thống FAT, cho phép người dùng thực hiện các thao tác như xem
- *   danh sách file, đọc/ghi file, tạo/xóa thư mục.
+ * Module Application - Triển khai giao diện người dùng
  *********************************************************************/
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include "application.h"
-#include "../middleware/middleware.h"
-#include "../utilities/log/print_color.h"
-#include "../common/common_types.h"
 #include "../fat_driver/fat_driver.h"
-#include "../ip_driver/ip_driver.h"
-#include "../hal/hal.h"
 
-/*********************************************************************
- * Private Function Prototypes
- *********************************************************************/
+#define CMD_MAX_LEN 256
+#define MAX_ARGS 16
+#define APP_PATH_MAX 1024
 
-/* Forward declarations for command handlers */
-static int32_t app_cmd_help_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_list_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_cd_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_mkdir_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_rmdir_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_cat_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_write_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_rm_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_cp_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_mv_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_mount_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_exit_handler(Application* app, int argc, char *argv[]);
-static int32_t app_cmd_clear_handler(Application* app, int argc, char *argv[]);
+/* Cấu trúc lệnh */
+typedef struct {
+    const char* name;
+    const char* help;
+    int (*handler)(Application* app, int argc, char* argv[]);
+} Command;
 
-/*********************************************************************
- * Private Variables
- *********************************************************************/
-
-/* Current directory */
-static char app_current_dir[APP_PATH_BUF_SIZE] = "/";
-
-/* Command table */
-static const struct {
-    const char *name;
-    const char *desc;
-    const char *usage;
-    int32_t (*handler)(Application* app, int argc, char *argv[]);
-} app_cmd_table[] = {
-    {"help",  "Hiển thị trợ giúp", "help [command]", app_cmd_help_handler},
-    {"ls",    "Liệt kê thư mục", "ls [path]", app_cmd_list_handler},
-    {"cd",    "Thay đổi thư mục", "cd <path>", app_cmd_cd_handler},
-    {"mkdir", "Tạo thư mục mới", "mkdir <path>", app_cmd_mkdir_handler},
-    {"rmdir", "Xóa thư mục", "rmdir <path>", app_cmd_rmdir_handler},
-    {"cat",   "Xem nội dung file", "cat <file>", app_cmd_cat_handler},
-    {"write", "Ghi nội dung vào file", "write <file> <content>", app_cmd_write_handler},
-    {"rm",    "Xóa file", "rm <file>", app_cmd_rm_handler},
-    {"cp",    "Sao chép file", "cp <source> <destination>", app_cmd_cp_handler},
-    {"mv",    "Di chuyển/đổi tên file", "mv <source> <destination>", app_cmd_mv_handler},
-    {"mount", "Mount file system", "mount <file>", app_cmd_mount_handler},
-    {"exit",  "Thoát chương trình", "exit", app_cmd_exit_handler},
-    {"cls", "Xóa màn hình", "clear", app_cmd_clear_handler},
-    {NULL, NULL, NULL, NULL}
-};
-
-/*********************************************************************
- * Public Function Implementations
- *********************************************************************/
-
-int application_init(Application* app, const char* img_path) {
-    if (!app || !img_path) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    /* Initialize IP driver */
-    ip_config_t ip_config = {
-        .img_path = img_path,
-        .sector_size = 512,
-        .total_sectors = 0,
-        .current_sector = 0
-    };
-
-    if (ip_driver_init(&ip_config) != IP_ERROR_SUCCESS) {
-        printf("Failed to initialize IP driver\n");
-        return STATUS_ERROR;
-    }
-
-    /* Initialize HAL */
-    hal_config_t hal_config = {
-        .driver = NULL,
-        .sector_size = 512,
-        .cache_size = 16
-    };
-
-    if (hal_init(&hal_config) != HAL_ERROR_SUCCESS) {
-        printf("Failed to initialize HAL\n");
-        ip_driver_deinit();
-        return STATUS_ERROR;
-    }
-
-    /* Initialize FAT driver */
-    if (fat_init(img_path) != FAT_ERROR_SUCCESS) {
-        printf("Failed to initialize FAT driver\n");
-        hal_deinit();
-        ip_driver_deinit();
-        return STATUS_ERROR;
-    }
-
-    // Khởi tạo Middleware
-    Middleware* mw = malloc(sizeof(Middleware));
-    if (!mw) {
-        fat_deinit();
-        hal_deinit();
-        ip_driver_deinit();
+/* Các hàm xử lý lệnh */
+static int cmd_ls(Application* app, int argc, char* argv[]) {
+    const char* path = (argc > 1) ? argv[1] : app->current_path;
+    fat_dir_t dir;
+    fat_dir_entry_t entry;
+    
+    if (fat_opendir(path, &dir) != FAT_SUCCESS) {
+        printf("Lỗi: Không thể đọc thư mục %s\n", path);
         return APP_ERROR;
     }
 
-    if (middleware_init(mw) != MID_SUCCESS) {
-        free(mw);
-        fat_deinit();
-        hal_deinit();
-        ip_driver_deinit();
-        return APP_ERROR;
+    printf("\nNội dung thư mục %s:\n", path);
+    printf("%-32s %8s %s\n", "Tên", "Kích thước", "Thuộc tính");
+    printf("----------------------------------------\n");
+    
+    while (fat_readdir(&dir, &entry) == FAT_SUCCESS) {
+        char attr[5] = "----";
+        if (entry.attr & FAT_ATTR_DIRECTORY) attr[0] = 'd';
+        if (entry.attr & FAT_ATTR_READ_ONLY) attr[1] = 'r';
+        if (entry.attr & FAT_ATTR_HIDDEN) attr[2] = 'h';
+        if (entry.attr & FAT_ATTR_SYSTEM) attr[3] = 's';
+        
+        char name[13];
+        memcpy(name, entry.name, 11);
+        name[11] = '\0';
+        
+        printf("%-32s %8u %s\n", 
+               name,
+               entry.file_size,
+               attr);
     }
-
-    app->mw = mw;
-    app->running = 1;
-    strncpy(app_current_dir, "/", sizeof(app_current_dir) - 1);
-    app_current_dir[sizeof(app_current_dir) - 1] = '\0';
+    
+    fat_closedir(&dir);
     return APP_SUCCESS;
 }
 
-void application_run_shell(Application* app) {
-    char command[1024];
-    
-    while (app->running) {
-        printf("%s> ", app_current_dir);
-        if (fgets(command, sizeof(command), stdin)) {
-            // Xóa ký tự newline
-            command[strcspn(command, "\n")] = 0;
-            
-            if (application_handle_command(app, command) != APP_SUCCESS) {
-                printf("Lệnh không hợp lệ\n");
-            }
-        }
-    }
-}
-
-int application_handle_command(Application* app, const char* command) {
-    if (!app || !command) return APP_ERROR;
-
-    char cmd[32];
-    char arg[992];
-    
-    // Tách lệnh và tham số
-    if (sscanf(command, "%31s %991s", cmd, arg) < 1) {
+static int cmd_cd(Application* app, int argc, char* argv[]) {
+    if (argc != 2) {
+        printf("Sử dụng: cd <thư_mục>\n");
         return APP_ERROR;
     }
 
-    // Tìm và thực thi lệnh
-    for (size_t i = 0; app_cmd_table[i].name != NULL; i++) {
-        if (strcmp(cmd, app_cmd_table[i].name) == 0) {
-            char* argv[32];
-            int argc = 1;
-            argv[0] = cmd;
-
-            // Tách tham số
-            char* token = strtok(arg, " ");
-            while (token && argc < 32) {
-                argv[argc++] = token;
-                token = strtok(NULL, " ");
-            }
-
-            return app_cmd_table[i].handler(app, argc, argv);
-        }
+    char new_path[APP_PATH_MAX];
+    
+    // Xử lý các trường hợp đặc biệt
+    if (strcmp(argv[1], "/") == 0) {
+        // Chuyển về root
+        strcpy(app->current_path, "/");
+        app->is_root_mode = 1;
+        printf("Đã chuyển sang chế độ root\n");
+        return APP_SUCCESS;
+    } 
+    else if (strcmp(argv[1], ".") == 0 || strcmp(argv[1], "./") == 0) {
+        // Giữ nguyên thư mục hiện tại
+        return APP_SUCCESS;
     }
-
-    return APP_ERROR;
-}
-
-void application_cleanup(Application* app) {
-    if (app) {
-        if (app->mw) {
-            middleware_cleanup(app->mw);
-            free(app->mw);
-        }
-        fat_deinit();
-        hal_deinit();
-        ip_driver_deinit();
-    }
-}
-
-/*********************************************************************
- * Private Function Implementations
- *********************************************************************/
-
-int32_t app_cmd_help_handler(Application* app, int argc, char *argv[]) {
-    (void)app; // Unused parameter
-    if (argc < 2) {
-        /* Hiển thị tất cả lệnh */
-        printf("Available commands:\n");
-        for (size_t i = 0; app_cmd_table[i].name != NULL; i++) {
-            printf("  %-10s - %s\n", app_cmd_table[i].name, app_cmd_table[i].desc);
+    else if (strcmp(argv[1], "..") == 0 || strcmp(argv[1], "../") == 0) {
+        // Chuyển về thư mục cha
+        char* last_slash = strrchr(app->current_path, '/');
+        if (last_slash == app->current_path) {
+            strcpy(app->current_path, "/");
+            app->is_root_mode = 1;
+            printf("Đã chuyển sang chế độ root\n");
+        } else {
+            *last_slash = '\0';
         }
         return APP_SUCCESS;
-    } else {
-        /* Tìm lệnh trong bảng */
-        for (size_t i = 0; app_cmd_table[i].name != NULL; i++) {
-            if (strcmp(argv[1], app_cmd_table[i].name) == 0) {
-                printf("Usage: %s\n", app_cmd_table[i].usage);
-                printf("Description: %s\n", app_cmd_table[i].desc);
-                return APP_SUCCESS;
-            }
+    }
+    else if (strncmp(argv[1], "../", 3) == 0) {
+        // Xử lý đường dẫn tương đối (../abc/def)
+        char* path = strdup(argv[1] + 3);
+        char* token = strtok(path, "/");
+        
+        // Chuyển về thư mục cha trước
+        char* last_slash = strrchr(app->current_path, '/');
+        if (last_slash == app->current_path) {
+            strcpy(app->current_path, "/");
+            app->is_root_mode = 1;
+        } else {
+            *last_slash = '\0';
         }
-        return APP_NOT_FOUND;
+        
+        // Duyệt qua từng phần của đường dẫn
+        while (token) {
+            strcat(app->current_path, "/");
+            strcat(app->current_path, token);
+            token = strtok(NULL, "/");
+        }
+        
+        free(path);
+        return APP_SUCCESS;
     }
+    
+    // Xử lý đường dẫn tuyệt đối
+    if (argv[1][0] == '/') {
+        strncpy(new_path, argv[1], APP_PATH_MAX-1);
+    } else {
+        // Xử lý đường dẫn tương đối
+        snprintf(new_path, APP_PATH_MAX-1, "%s/%s", 
+                app->current_path[1] ? app->current_path : "", argv[1]);
+    }
+    
+    // Kiểm tra thư mục tồn tại
+    fat_dir_t dir;
+    if (fat_opendir(new_path, &dir) != FAT_SUCCESS) {
+        printf("Lỗi: Thư mục không tồn tại\n");
+        return APP_ERROR;
+    }
+    fat_closedir(&dir);
+    
+    strcpy(app->current_path, new_path);
+    app->is_root_mode = (strcmp(app->current_path, "/") == 0);
+    
+    if (app->is_root_mode) {
+        printf("Đã chuyển sang chế độ root\n");
+    } else {
+        printf("Đã chuyển sang chế độ user\n");
+    }
+    
+    return APP_SUCCESS;
 }
 
-int32_t app_cmd_list_handler(Application* app, int argc, char *argv[]) {
-    (void)argc; // Unused parameter
-    (void)argv; // Unused parameter
-    return middleware_list_directory(app->mw);
+static int cmd_help(Application* app, int argc, char* argv[]) {
+    (void)app;
+    (void)argc;
+    (void)argv;
+    
+    printf("\nCác lệnh được hỗ trợ:\n\n");
+    printf("ls [path]      - Liệt kê nội dung thư mục\n");
+    printf("cd <path>      - Thay đổi thư mục hiện tại\n");
+    printf("help           - Hiển thị trợ giúp\n");
+    printf("exit           - Thoát chương trình\n\n");
+    
+    printf("Các đường dẫn hỗ trợ:\n");
+    printf("  /          - Thư mục gốc\n");
+    printf("  ./         - Thư mục hiện tại\n");
+    printf("  ../        - Thư mục cha\n");
+    printf("  ../abc     - Thư mục abc trong thư mục cha\n");
+    printf("  /abc/def   - Đường dẫn tuyệt đối\n\n");
+    return APP_SUCCESS;
 }
 
-int32_t app_cmd_cd_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    int32_t result = middleware_change_directory(app->mw, argv[1]);
-    if (result == APP_SUCCESS) {
-        strncpy(app_current_dir, argv[1], sizeof(app_current_dir) - 1);
-        app_current_dir[sizeof(app_current_dir) - 1] = '\0';
-    }
-    return result;
-}
-
-int32_t app_cmd_mkdir_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    return middleware_create_directory(app->mw, argv[1]);
-}
-
-int32_t app_cmd_rmdir_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    return middleware_remove_directory(app->mw, argv[1]);
-}
-
-int32_t app_cmd_cat_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    return middleware_read_file(app->mw, argv[1]);
-}
-
-int32_t app_cmd_write_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 3) {
-        return APP_INVALID;
-    }
-    return middleware_write_file(app->mw, argv[1], argv[2]);
-}
-
-int32_t app_cmd_rm_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    return middleware_remove_file(app->mw, argv[1]);
-}
-
-int32_t app_cmd_cp_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 3) {
-        return APP_INVALID;
-    }
-    return middleware_copy_file(app->mw, argv[1], argv[2]);
-}
-
-int32_t app_cmd_mv_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 3) {
-        return APP_INVALID;
-    }
-    return middleware_move_file(app->mw, argv[1], argv[2]);
-}
-
-int32_t app_cmd_mount_handler(Application* app, int argc, char *argv[]) {
-    if (argc < 2) {
-        return APP_INVALID;
-    }
-    return middleware_mount(app->mw, argv[1]);
-}
-
-int32_t app_cmd_exit_handler(Application* app, int argc, char *argv[]) {
-    (void)argc; // Unused parameter
-    (void)argv; // Unused parameter
+static int cmd_exit(Application* app, int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
     app->running = 0;
     return APP_SUCCESS;
 }
 
-int32_t app_cmd_clear_handler(Application* app, int argc, char *argv[]) {
-    (void)app; // Unused parameter
-    (void)argc; // Unused parameter
-    (void)argv; // Unused parameter
-    system("clear");
+/* Bảng lệnh */
+static Command commands[] = {
+    {"ls", "Liệt kê nội dung thư mục", cmd_ls},
+    {"cd", "Thay đổi thư mục hiện tại", cmd_cd},
+    {"help", "Hiển thị trợ giúp", cmd_help},
+    {"exit", "Thoát chương trình", cmd_exit},
+    {NULL, NULL, NULL}
+};
+
+/* Xử lý lệnh người dùng */
+static int handle_command(Application* app, const char* cmd_str) {
+    char cmd_buf[CMD_MAX_LEN];
+    char* argv[MAX_ARGS];
+    int argc = 0;
+    
+    strncpy(cmd_buf, cmd_str, CMD_MAX_LEN - 1);
+    cmd_buf[CMD_MAX_LEN - 1] = '\0';
+    
+    char* token = strtok(cmd_buf, " ");
+    while (token && argc < MAX_ARGS) {
+        argv[argc++] = token;
+        token = strtok(NULL, " ");
+    }
+    
+    if (argc == 0) return APP_SUCCESS;
+    
+    for (Command* cmd = commands; cmd->name != NULL; cmd++) {
+        if (strcmp(argv[0], cmd->name) == 0) {
+            return cmd->handler(app, argc, argv);
+        }
+    }
+    
+    printf("Lỗi: Lệnh không hợp lệ '%s'\n", argv[0]);
+    return APP_ERROR;
+}
+
+/* Kiểm tra file img */
+static int check_img_file(const char* path) {
+    FILE* fp = fopen(path, "rb");
+    if (!fp) return 0;
+    
+    // Đọc boot sector để kiểm tra định dạng FAT
+    uint8_t boot[512];
+    if (fread(boot, 1, 512, fp) != 512) {
+        fclose(fp);
+        return 0;
+    }
+    
+    // Kiểm tra chữ ký boot sector
+    if (boot[510] != 0x55 || boot[511] != 0xAA) {
+        fclose(fp);
+        return 0;
+    }
+    
+    // Kiểm tra định dạng FAT từ OEM Name
+    const char* fat_sig = (const char*)&boot[3];
+    if (strncmp(fat_sig, "MSDOS5.0", 8) != 0 &&
+        strncmp(fat_sig, "FAT32   ", 8) != 0 &&
+        strncmp(fat_sig, "FAT16   ", 8) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    
+    fclose(fp);
+    return 1;
+}
+
+/* Khởi tạo cấu hình mặc định */
+static void init_default_config(AppConfig* config) {
+    // Sử dụng giá trị mặc định
+    config->mode = MODE_READ_ONLY;
+    config->sector_size = 512;
+    config->cache_size = 16;
+    config->dir_name_len = 8;
+}
+
+/* Khởi tạo ứng dụng */
+int application_init(Application* app, const char* img_path, const char* mode) {
+    if (!app || !img_path || !mode) return APP_ERROR;
+    
+    // Kiểm tra file img
+    if (!check_img_file(img_path)) {
+        printf("Lỗi: File %s không tồn tại hoặc không phải file img\n", img_path);
+        return APP_ERROR;
+    }
+    
+    // Kiểm tra mode
+    if (strcmp(mode, MODE_READ_ONLY) != 0 && strcmp(mode, MODE_READ_WRITE) != 0) {
+        printf("Lỗi: Mode không hợp lệ (phải là 'ro' hoặc 'rw')\n");
+        return APP_ERROR;
+    }
+    
+    // Khởi tạo cấu hình mặc định
+    init_default_config(&app->config);
+    app->config.mode = mode;
+    
+    // Khởi tạo FAT
+    if (fat_init(img_path) != FAT_SUCCESS) {
+        printf("Lỗi: Không thể đọc file img\n");
+        return APP_ERROR;
+    }
+    
+    app->running = 1;
+    app->img_path = strdup(img_path);
+    app->current_path = strdup("/");
+    app->is_root_mode = 1;
+    
+    printf("Đọc file img thành công!\n");
+    printf("Chế độ: %s\n", app->is_root_mode ? "root" : "user");
+    
     return APP_SUCCESS;
 }
 
-/*********************************************************************
- * Main Function
- *********************************************************************/
+/* Chạy shell */
+void application_run_shell(Application* app) {
+    char cmd_buf[CMD_MAX_LEN];
+    
+    printf("\nFAT File System Shell v1.0\n");
+    printf("Nhập 'help' để xem danh sách lệnh\n\n");
+    
+    while (app->running) {
+        printf("%s> ", app->current_path);
+        if (fgets(cmd_buf, CMD_MAX_LEN, stdin)) {
+            cmd_buf[strcspn(cmd_buf, "\n")] = 0;
+            handle_command(app, cmd_buf);
+        }
+    }
+}
 
-int main(int argc, char *argv[]) {
-    (void)argc; // Unused parameter
-    (void)argv; // Unused parameter
-    Application app;
-    if (application_init(&app, NULL) != APP_SUCCESS) {
+/* Dọn dẹp */
+void application_cleanup(Application* app) {
+    if (!app) return;
+    if (app->img_path) free(app->img_path);
+    if (app->current_path) free(app->current_path);
+    fat_deinit();
+}
+
+/* Hàm main */
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        printf("Sử dụng: %s <đường_dẫn_img> <mode>\n", argv[0]);
+        printf("Mode: ro (read-only) hoặc rw (read-write)\n");
         return 1;
     }
-
+    
+    Application app;
+    if (application_init(&app, argv[1], argv[2]) != APP_SUCCESS) {
+        return 1;
+    }
+    
     application_run_shell(&app);
     application_cleanup(&app);
-
+    
     return 0;
 }
 

@@ -56,7 +56,7 @@ Các tham số này được sử dụng để cấu hình toàn bộ hệ thố
 ### 2.2. Luồng truy cập giữa các tầng
 
 * **Tầng Application (Ứng dụng):**
-  * Giao diện shell trong application.c nhận lệnh từ người dùng (ví dụ: mount, ls, cd, cat, …).
+  * Giao diện shell trong application.c nhận lệnh từ người dùng (ví dụ: envidence, ls, cd, cat, …).
   * Ứng dụng kiểm tra tham số (đường dẫn file img, mode: read-only/read-write) và chuyển yêu cầu xuống tầng Middleware.
 * **Tầng Middleware:**
   * Xử lý logic nghiệp vụ: phân tích lệnh, chuyển đổi đường dẫn, kiểm tra quyền, …
