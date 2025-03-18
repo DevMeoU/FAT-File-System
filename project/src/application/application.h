@@ -10,6 +10,7 @@
 
 typedef struct {
     Middleware* middleware;
+    char env_path[500];
     bool running;
 } Application;
 

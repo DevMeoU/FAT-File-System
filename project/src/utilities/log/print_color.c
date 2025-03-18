@@ -10,6 +10,7 @@ void print_color(const char* color, const char* format, ...) {
     vprintf(format, args);
     printf("%s", COLOR_RESET);
     
+    fflush(stdout);
     va_end(args);
 }
 
@@ -21,6 +22,7 @@ void print_error(const char* format, ...) {
     vprintf(format, args);
     printf("%s", COLOR_RESET);
     
+    fflush(stdout);
     va_end(args);
 }
 
@@ -32,6 +34,7 @@ void print_success(const char* format, ...) {
     vprintf(format, args);
     printf("%s", COLOR_RESET);
     
+    fflush(stdout);
     va_end(args);
 }
 
@@ -43,6 +46,7 @@ void print_warning(const char* format, ...) {
     vprintf(format, args);
     printf("%s", COLOR_RESET);
     
+    fflush(stdout);
     va_end(args);
 }
 
@@ -54,5 +58,6 @@ void print_info(const char* format, ...) {
     vprintf(format, args);
     printf("%s", COLOR_RESET);
     
+    fflush(stdout);
     va_end(args);
 }

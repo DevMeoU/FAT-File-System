@@ -20,12 +20,17 @@ int application_run(Application* app) {
     while (app->running) {
         // Hiển thị prompt
         if (middleware_is_root_mode(app->middleware)) {
-            print_color(COLOR_GREEN, "root");
+            print_color(COLOR_GREEN, "DEESOL");
+            print_color(COLOR_BOLD, "@");
+            print_color(COLOR_GREEN, "root: ");
         } else {
-            print_color(COLOR_BLUE, "user");
+            print_color(COLOR_GREEN, "DEESOL");
+            print_color(COLOR_BOLD, "@");
+            print_color(COLOR_BLUE, "user: ");
         }
-        
-        printf(":%s> ", middleware_get_current_path(app->middleware));
+        print_color(COLOR_MAGENTA ,"%s", middleware_get_current_path(app->middleware));
+        print_color(COLOR_YELLOW,"$> ");
+        fflush(stdout);
         
         // Đọc lệnh
         if (fgets(command, sizeof(command), stdin) == NULL) {
@@ -141,10 +146,15 @@ int main(int argc, char* argv[]) {
     
     // Khởi tạo và chạy ứng dụng
     Application app;
-    Middleware middleware; // Tạm thời, sẽ được khởi tạo lại trong application_run
-    
-    middleware.mode = mode;
-    middleware.img_path = img_path;
+    Middleware middleware = {
+        .img_path = img_path,
+        .mode = mode,
+        .fat_driver = NULL,
+        .current_directory = NULL,
+        .current_path = "/", // Thư mục hiện tại là root
+        .is_root_mode = false
+    };
+
     if (application_init(&app, &middleware) != 0) {
         print_error("Failed to initialize application\n");
         return 1;

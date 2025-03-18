@@ -30,33 +30,33 @@ int middleware_init(Middleware* middleware) {
     config.dir_name_len = DIR_NAME_LEN_8;
     
     middleware->fat_driver = fat_driver;
+    
     if (fat_driver_init(fat_driver, config) != 0) {
         print_error("Failed to initialize FAT Driver\n");
-        fat_driver_deinit(fat_driver);
+        free(fat_driver);
         return -1;
     }
     
-    // Mount hệ thống tệp
     if (fat_driver_mount(fat_driver) != 0) {
         print_error("Failed to mount file system\n");
         fat_driver_unmount(fat_driver);
         fat_driver_deinit(fat_driver);
+        free(fat_driver);
         return -1;
     }
     
     print_success("Mount successful\n");
     
+    middleware->current_directory = fat_driver_get_root_directory(fat_driver);
+    strcpy(middleware->current_path, "/");
+    middleware->is_root_mode = true;
+    
     // Chuyển chế độ dựa trên đường dẫn
-    if (strcmp(middleware->img_path, "/") == 0) {
+    if (strcmp(middleware->current_path, "/") == 0) {
         middleware_switch_to_root_mode(middleware);
     } else {
         middleware_switch_to_user_mode(middleware);
     }
-    
-    middleware->current_directory = fat_driver_get_root_directory(fat_driver);
-    strcpy(middleware->current_path, "/");
-    middleware->is_root_mode = true;
-
     return 0;
 }
 
@@ -125,8 +125,9 @@ int middleware_ls(Middleware* middleware) {
             strcpy(modified, "N/A");
         }
         
-        printf("%-32s %-12s %-12u %-20s %-20s\n", 
-               current->name, 
+        /* Print color for directories */
+        print_color(current->type == FILE_TYPE_DIRECTORY ? COLOR_CYAN : COLOR_WHITE, "%-32s ", current->name);
+        printf("%-12s %-12u %-20s %-20s\n",
                type_str, 
                current->size, 
                created, 
@@ -170,8 +171,17 @@ int middleware_cd(Middleware* middleware, const char* path) {
         }
     }
     
+    /* Cập nhật được dẫn tạm thời */
+    char temp_path[256] = {0};
+    strcpy(temp_path, middleware->current_path);
+    if(middleware->current_path[strlen(middleware->current_path) - 1] != '/')
+    {
+        strcat(temp_path, "/");
+    }
+    strcat(temp_path, path);
+
     // Tìm thư mục theo đường dẫn
-    FileNode* target = fat_driver_find_path(middleware->fat_driver, path);
+    FileNode* target = fat_driver_find_path(middleware->fat_driver, temp_path);
     
     if (!target) {
         print_error("Directory not found: %s\n", path);
@@ -219,6 +229,16 @@ int middleware_cd(Middleware* middleware, const char* path) {
         }
     }
     *q = '\0';
+    if (q > middleware->current_path && *(q-1) == '/') {
+        *(q-1) = '\0';
+    }
+    
+    if (middleware->current_path[0] == '\0') {
+        middleware->current_path[0] = '/';
+        middleware->current_path[1] = '\0';
+    }   
+    // In ra thông báo thành công
+    // print_success("Changed directory to: %s\n", middleware->current_path);
     
     return 0;
 }
@@ -226,8 +246,16 @@ int middleware_cd(Middleware* middleware, const char* path) {
 int middleware_cat(Middleware* middleware, const char* path) {
     if (!middleware || !path) return -1;
     
+    /* Cập nhật được dẫn tạm thời */
+    char temp_path[256] = {0};
+    strcpy(temp_path, middleware->current_path);
+    if(middleware->current_path[strlen(middleware->current_path) - 1] != '/')
+    {
+        strcat(temp_path, "/");
+    }
+    strcat(temp_path, path);
     // Tìm file theo đường dẫn
-    FileNode* file = fat_driver_find_path(middleware->fat_driver, path);
+    FileNode* file = fat_driver_find_path(middleware->fat_driver, temp_path);
     
     if (!file) {
         print_error("File not found: %s\n", path);
@@ -257,7 +285,27 @@ int middleware_cat(Middleware* middleware, const char* path) {
     buffer[bytes_read] = '\0';
     
     // In nội dung file
-    printf("%s\n", buffer);
+    // print_color(COLOR_YELLOW, "%s\n", buffer);
+    for (int i = 0; i < bytes_read; i++)
+    {
+        print_color(COLOR_YELLOW, "%c", buffer[i]);
+    }
+    printf("\n");
+    fflush(stdout);
+    
+    
+    // In nội dung file dưới dạng hex
+    // for(int i = 0, j = 0; i < bytes_read; i++, j++)
+    // {
+    //     if(j % 16 == 0 && j != 0)
+    //     {
+    //         printf("\n");
+    //         j = 0;
+    //     }
+    //     print_color(COLOR_YELLOW, "%02X ", buffer[i]);
+    //     fflush(stdout);
+    // }
+    // printf("\n");
     
     free(buffer);
     return 0;
