@@ -86,7 +86,15 @@ TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
 #------------------
 # File ảnh
 #------------------
-IMAGE_FILE := $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img)
+IMAGE_FILES := $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img)
+
+# Đánh số để truy cập image
+IMAGE_NUM ?= 1
+
+# Chọn file ảnh theo IMAGE_NUM tự động (hỗ trợ nhiều file)
+FILE_IMAGE := $(word $(IMAGE_NUM), $(IMAGE_FILES))
+
+$(info Using image file: $(FILE_IMAGE))
 
 #------------------
 # Chế độ
@@ -139,7 +147,7 @@ clean:
 # Run
 run: $(TARGET)
 	@echo "Running $(TARGET)"
-	@./$(TARGET) $(IMAGE_FILE) $(MODE)
+	@./$(TARGET) $(FILE_IMAGE) $(MODE)
 
 # Print
 print-%:

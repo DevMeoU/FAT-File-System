@@ -13,6 +13,7 @@
 #define COLOR_WHITE   "\033[37m"
 
 #define COLOR_BOLD    "\033[1m"
+#define COLOR_ITALIC "\033[3m"
 #define COLOR_UNDERLINE "\033[4m"
 
 /**

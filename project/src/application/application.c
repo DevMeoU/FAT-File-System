@@ -13,24 +13,29 @@ int application_init(Application* app, Middleware* middleware) {
     return -1;
 }
 
+void display_prompt(Application* app) {
+    // Hiển thị prompt
+    if (middleware_is_root_mode(app->middleware)) {
+        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
+        print_color(COLOR_BOLD, "@");
+        print_color(COLOR_ITALIC COLOR_GREEN, "root: ");
+    } else {
+        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
+        print_color(COLOR_BOLD, "@");
+        print_color(COLOR_ITALIC COLOR_BLUE, "user: ");
+    }
+    print_color(COLOR_MAGENTA ,"%s", middleware_get_current_path(app->middleware));
+    print_color(COLOR_YELLOW,"$> ");
+    fflush(stdout);
+}
+
 int application_run(Application* app) {
     // Vòng lặp chính của ứng dụng
     char command[256];
     
     while (app->running) {
-        // Hiển thị prompt
-        if (middleware_is_root_mode(app->middleware)) {
-            print_color(COLOR_GREEN, "DEESOL");
-            print_color(COLOR_BOLD, "@");
-            print_color(COLOR_GREEN, "root: ");
-        } else {
-            print_color(COLOR_GREEN, "DEESOL");
-            print_color(COLOR_BOLD, "@");
-            print_color(COLOR_BLUE, "user: ");
-        }
-        print_color(COLOR_MAGENTA ,"%s", middleware_get_current_path(app->middleware));
-        print_color(COLOR_YELLOW,"$> ");
-        fflush(stdout);
+        /* Hiển thị prompt */
+        display_prompt(app);
         
         // Đọc lệnh
         if (fgets(command, sizeof(command), stdin) == NULL) {
@@ -43,12 +48,83 @@ int application_run(Application* app) {
             command[len - 1] = '\0';
         }
         
-        // Xử lý lệnh
-        application_process_command(app, command);
+        /* Tiền xử lý lệnh && */
+        if(process_command_with_and(app, command) == 0){
+            continue;
+        }
+        else
+        {
+            // Xử lý lệnh
+            if(-1 == application_process_command(app, command)){
+                print_error("Failed to process command\n");
+            }
+        }
+
     }
     
     middleware_denit(app->middleware);
     
+    return 0;
+}
+
+// Hàm loại bỏ khoảng trắng ở đầu và cuối chuỗi
+char *trim(char *str) {
+    while (isspace((unsigned char)*str)) str++;  // Bỏ khoảng trắng đầu
+    if (*str == 0) return str;  // Nếu chuỗi rỗng, trả về ngay
+
+    char *end = str + strlen(str) - 1;
+    while (end > str && isspace((unsigned char)*end)) end--;  // Bỏ khoảng trắng cuối
+
+    end[1] = '\0';  // Kết thúc chuỗi
+    return str;
+}
+
+// Hàm thay thế strtok_r()
+char *custom_strtok_r(char *str, const char *delim, char **saveptr) {
+    if (str) {
+        *saveptr = str;
+    }
+    if (!*saveptr) {
+        return NULL;
+    }
+
+    str = *saveptr;
+    char *end = strstr(str, delim);
+    if (end) {
+        *end = '\0';
+        *saveptr = end + strlen(delim);
+    } else {
+        *saveptr = NULL;
+    }
+
+    return str;
+}
+
+// Hàm xử lý lệnh chứa &&
+int process_command_with_and(Application* app, const char *command) {
+    char command_copy[1024];  
+    strcpy(command_copy, command);  // Tạo bản sao để chỉnh sửa
+
+    if (!command) return -1;
+
+    if(strstr(command, "&&") == NULL){
+        return -1;
+    }
+
+    char *saveptr = NULL;
+    char *cmd = custom_strtok_r(command_copy, "&&", &saveptr);
+
+    while (cmd) {
+        cmd = trim(cmd);
+        if (*cmd != '\0') {
+            // Gọi xử lý lệnh ở đây
+            display_prompt(app);
+            if(application_process_command(app, cmd)){
+                return -1;
+            }
+        }
+        cmd = custom_strtok_r(NULL, "&&", &saveptr);
+    }
     return 0;
 }
 
@@ -82,7 +158,7 @@ int application_process_command(Application* app, const char* command) {
         return middleware_cat(app->middleware, path);
     } else if (strcmp(cmd, "evidence") == 0) {
         return middleware_evidence(app->middleware);
-    } else if (strcmp(cmd, "cls") == 0) {
+    } else if (strcmp(cmd, "cls") == 0 || strcmp(cmd, "clear") == 0) {
         system("clear");
         return 0;
     } else if (strcmp(cmd, "help") == 0) {
@@ -106,7 +182,7 @@ void application_show_help(Application* app) {
     printf("  cd <path>           Change directory\n");
     printf("  cat <file>          Display file content\n");
     printf("  evidence            Show file system information\n");
-    printf("  cls                 Clear the screen\n");
+    printf("  cls, clear          Clear the screen\n");
     printf("  help                Show this help message\n");
     printf("  exit, quit          Exit the program\n");
 }
