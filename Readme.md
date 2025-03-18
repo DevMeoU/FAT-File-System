@@ -1,4 +1,3 @@
-
 # FAT File System Project
 
 ## 1. Tổng Quan Kiến Trúc
@@ -582,6 +581,15 @@ help:
 ***Kiểm thử**: Viết unit test cho từng tầng (IP Driver: đọc/ghi dữ liệu; FAT Driver: liệt kê file, v.v.).
 
 ***Hiệu suất**: Cân nhắc caching trong Middleware nếu cần xử lý nhiều dữ liệu.
+
+## 6. Hình ảnh chạy thực tế
+
+![1742297625445](image/README/1742297625445.png)
+
+![1742297655626](image/README/1742297655626.png)
+
+![1742297708543](image/README/1742297708543.png)
+
 
 ---
 
