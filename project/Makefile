@@ -22,12 +22,12 @@ BUILD_DIR := $(ROOT_DIR)/build
 OBJ_DIR   := $(BUILD_DIR)/obj
 BIN_DIR   := $(BUILD_DIR)/bin
 DEP_DIR   := $(BUILD_DIR)/dep
-
+IMAGE_DIR := $(ROOT_DIR)/images
 #------------------
 # Các file nguồn
 #------------------
 # Tìm tất cả các file .c trong thư mục src và thư mục con
-SRCS := $(wildcard $(SRC_DIR)/*.c)
+SRCS := $(shell find $(SRC_DIR) -type f -name "*.c")
 
 # Tạo danh sách file object tương ứng
 OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
@@ -81,7 +81,19 @@ endif
 #------------------
 # File đích
 #------------------
-TARGET := $(BIN_DIR)/$(PROJECT_NAME)
+TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
+
+#------------------
+# File ảnh
+#------------------
+IMAGE_FILE := $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img)
+
+#------------------
+# Chế độ
+#------------------
+# Chế độ mặc định
+BUILD_MODE ?= release
+MODE ?= read-only
 
 #------------------
 # Các target
@@ -126,8 +138,8 @@ clean:
 
 # Run
 run: $(TARGET)
-	@echo "Running $(TARGET)..."
-	@./$(TARGET)
+	@echo "Running $(TARGET)"
+	@./$(TARGET) $(IMAGE_FILE) $(MODE)
 
 # Print
 print-%:

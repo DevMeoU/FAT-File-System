@@ -16,7 +16,8 @@ typedef enum {
 typedef enum {
     FAT_TYPE_12,
     FAT_TYPE_16,
-    FAT_TYPE_32
+    FAT_TYPE_32,
+    FAT_TYPE_UNKNOWN
 } FatType;
 
 // Các kích thước sector hỗ trợ
@@ -49,6 +50,7 @@ typedef enum {
 
 // Cấu trúc cấu hình hệ thống
 typedef struct {
+    const char * img_path;
     FileSystemMode mode;
     FatType fat_type;
     SectorSize sector_size;

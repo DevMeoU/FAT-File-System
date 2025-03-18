@@ -8,11 +8,17 @@
 /**
  * Khởi tạo FAT Driver
  * @param driver Con trỏ đến cấu trúc FATDriver
- * @param hal Con trỏ đến cấu trúc HAL
  * @param config Cấu hình hệ thống tệp
  * @return 0 nếu thành công, -1 nếu thất bại
  */
-int fat_driver_init(FATDriver* driver, HAL* hal, FileSystemConfig config);
+int fat_driver_init(FATDriver* driver, const FileSystemConfig config);
+
+/**
+ *  Hủy bỏ FAT Driver
+ * @param driver Con trỏ đến cấu trúc FATDriver
+ * @return 0 nếu thành công, -1 nếu thất bại
+ */
+int fat_driver_deinit(FATDriver* driver);
 
 /**
  * Mount hệ thống tệp

@@ -4,13 +4,70 @@
 #include <stdlib.h>
 #include <string.h>
 
-int middleware_init(Middleware* middleware, FATDriver* fat_driver) {
+int middleware_init(Middleware* middleware) {
+    FATDriver* fat_driver = malloc(sizeof(FATDriver)); /* Khai báo cấu trúc Middleware */
     if (!middleware || !fat_driver) return -1;
     
+    // Kiểm tra tham số đầu vào
+    if (!middleware->img_path) {
+        print_error("Image file path is required\n");
+        return -1;
+    }
+    
+    const char* ext = strrchr(middleware->img_path, '.');
+    if (!ext || strcmp(ext, ".img") != 0) {
+        print_error("File is not an image file (.img): %s\n", middleware->img_path);
+        return -1;
+    }
+    
+    // Cấu hình hệ thống tệp
+    FileSystemConfig config;
+    config.img_path = middleware->img_path;
+    config.mode = middleware->mode;
+    config.fat_type = FAT_TYPE_16; // Mặc định, sẽ được xác định lại trong fat_driver_mount
+    config.sector_size = SECTOR_SIZE_512;
+    config.cache_size = CACHE_SIZE_16;
+    config.dir_name_len = DIR_NAME_LEN_8;
+    
     middleware->fat_driver = fat_driver;
+    if (fat_driver_init(fat_driver, config) != 0) {
+        print_error("Failed to initialize FAT Driver\n");
+        fat_driver_deinit(fat_driver);
+        return -1;
+    }
+    
+    // Mount hệ thống tệp
+    if (fat_driver_mount(fat_driver) != 0) {
+        print_error("Failed to mount file system\n");
+        fat_driver_unmount(fat_driver);
+        fat_driver_deinit(fat_driver);
+        return -1;
+    }
+    
+    print_success("Mount successful\n");
+    
+    // Chuyển chế độ dựa trên đường dẫn
+    if (strcmp(middleware->img_path, "/") == 0) {
+        middleware_switch_to_root_mode(middleware);
+    } else {
+        middleware_switch_to_user_mode(middleware);
+    }
+    
     middleware->current_directory = fat_driver_get_root_directory(fat_driver);
     strcpy(middleware->current_path, "/");
     middleware->is_root_mode = true;
+
+    return 0;
+}
+
+int middleware_denit(Middleware* middleware) {
+    if (!middleware) return -1;
+    
+    if (middleware->fat_driver) {
+        fat_driver_unmount(middleware->fat_driver);
+        fat_driver_deinit(middleware->fat_driver);
+        free(middleware->fat_driver);
+    }
     
     return 0;
 }
@@ -221,6 +278,7 @@ int middleware_evidence(Middleware* middleware) {
         case FAT_TYPE_12: fat_type_str = "FAT12"; break;
         case FAT_TYPE_16: fat_type_str = "FAT16"; break;
         case FAT_TYPE_32: fat_type_str = "FAT32"; break;
+        default: break;
     }
     printf("FAT Type: %s\n", fat_type_str);
     

@@ -9,13 +9,13 @@
 #define FAT16_EOC 0xFFFF     // End of cluster chain cho FAT16
 #define FAT32_EOC 0x0FFFFFFF // End of cluster chain cho FAT32
 
-#define FAT_ATTR_READ_ONLY 0x01
-#define FAT_ATTR_HIDDEN    0x02
-#define FAT_ATTR_SYSTEM    0x04
-#define FAT_ATTR_VOLUME_ID 0x08
-#define FAT_ATTR_DIRECTORY 0x10
-#define FAT_ATTR_ARCHIVE   0x20
-#define FAT_ATTR_LFN       0x0F  // Thuộc tính cho Long File Name
+#define FAT_ATTR_READ_ONLY  0x01
+#define FAT_ATTR_HIDDEN     0x02
+#define FAT_ATTR_SYSTEM     0x04
+#define FAT_ATTR_VOLUME_ID  0x08
+#define FAT_ATTR_DIRECTORY  0x10
+#define FAT_ATTR_ARCHIVE    0x20
+#define FAT_ATTR_LFN        0x0F  // Thuộc tính cho Long File Name
 
 // Cấu trúc entry trong thư mục FAT
 typedef struct {
@@ -35,10 +35,10 @@ typedef struct {
 } FATDirEntry;
 
 // Các hàm nội bộ cho FAT Driver
-void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* buffer);
-int fat_driver_load_fat_table(FATDriver* driver);
-int fat_driver_load_root_directory(FATDriver* driver);
-int fat_driver_build_directory_tree(FATDriver* driver);
+// void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* buffer);
+// int fat_driver_load_fat_table(FATDriver* driver);
+// int fat_driver_load_root_directory(FATDriver* driver);
+// int fat_driver_build_directory_tree(FATDriver* driver);
 int fat_driver_build_directory_tree_recursive(FATDriver* driver, FileNode* directory);
 uint32_t fat_driver_get_next_cluster(FATDriver* driver, uint32_t current_cluster);
 uint32_t fat_driver_get_fat_entry(FATDriver* driver, uint32_t cluster);

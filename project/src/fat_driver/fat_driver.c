@@ -9,8 +9,14 @@ static int fat_driver_load_root_directory(FATDriver* driver);
 static int fat_driver_build_directory_tree(FATDriver* driver);
 static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_sector_buffer);
 
-int fat_driver_init(FATDriver* driver, HAL* hal, FileSystemConfig config) {
+int fat_driver_init(FATDriver* driver, const FileSystemConfig config) {
+    // Khởi tạo HAL
+    HAL* hal = malloc(sizeof(HAL));
+    if (hal_init(hal, config.img_path, SECTOR_SIZE_512) != 0) {
+        return -1;
+    }
     if (!driver || !hal) return -1;
+
     
     // Khởi tạo các thành phần của driver
     memset(driver, 0, sizeof(FATDriver));
@@ -22,6 +28,14 @@ int fat_driver_init(FATDriver* driver, HAL* hal, FileSystemConfig config) {
     driver->cache = malloc(driver->cache_size * hal_get_sector_size(hal));
     if (!driver->cache) return -1;
     
+    return 0;
+}
+
+int fat_driver_deinit(FATDriver* driver) {
+    if (!driver || !driver->hal) return -1;
+    
+    hal_deinit(driver->hal);
+    free(driver->cache);
     return 0;
 }
 
@@ -388,11 +402,11 @@ static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_
     
     // Sao chép volume label (11 byte)
     memcpy(bs->volume_label, boot_sector_buffer + (bs->fat_size_16 == 0 ? 71 : 43), 11);
-    bs->volume_label[11] = '\0';
+    // bs->volume_label[11] = '\0';
     
     // Sao chép file system type (8 byte)
     memcpy(bs->fs_type, boot_sector_buffer + (bs->fat_size_16 == 0 ? 82 : 54), 8);
-    bs->fs_type[8] = '\0';
+    // bs->fs_type[8] = '\0';
 }
 
 // Hàm nội bộ để load bảng FAT
@@ -445,7 +459,7 @@ static int fat_driver_load_root_directory(FATDriver* driver) {
     memset(driver->root_directory, 0, sizeof(FileNode));
     strcpy(driver->root_directory->name, "/");
     driver->root_directory->type = FILE_TYPE_DIRECTORY;
-    driver->root_directory->attributes = FAT_ATTR_DIRECTORY;
+    driver->root_directory->attributes.directory = true; // FAT_ATTR_DIRECTORY;
     
     if (fat_driver_get_fat_type(driver) == FAT_TYPE_32) {
         driver->root_directory->first_cluster = driver->boot_sector.root_cluster;
@@ -685,7 +699,7 @@ void fat_driver_fill_file_node(FATDriver* driver, FileNode* node, const FATDirEn
     
     // Điền các thông tin khác
     node->size = entry->file_size;
-    node->attributes = FAT_ATTR_DIRECTORY;
+    node->attributes.directory = true; // FAT_ATTR_DIRECTORY;
     
     if (entry->attributes & FAT_ATTR_DIRECTORY) {
         node->type = FILE_TYPE_DIRECTORY;

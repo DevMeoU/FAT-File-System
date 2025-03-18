@@ -1,6 +1,10 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "../utilities/log/print_color.h"
 #include "../common/common_types.h"
 #include "../middleware/middleware.h"
 
@@ -12,7 +16,6 @@ typedef struct {
 /**
  * Khởi tạo Application
  * @param app Con trỏ đến cấu trúc Application
- * @param middleware Con trỏ đến cấu trúc Middleware
  * @return 0 nếu thành công, -1 nếu thất bại
  */
 int application_init(Application* app, Middleware* middleware);
@@ -24,7 +27,7 @@ int application_init(Application* app, Middleware* middleware);
  * @param mode Chế độ (read-only hoặc read-write)
  * @return 0 nếu thành công, -1 nếu thất bại
  */
-int application_run(Application* app, const char* img_path, FileSystemMode mode);
+int application_run(Application* app);
 
 /**
  * Xử lý lệnh từ người dùng

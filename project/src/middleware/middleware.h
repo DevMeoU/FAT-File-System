@@ -6,6 +6,8 @@
 #include "../fat_driver/fat_driver_types.h"
 
 typedef struct {
+    const char* img_path;
+    FileSystemMode mode;
     FATDriver* fat_driver;
     FileNode* current_directory;
     char current_path[256];
@@ -15,10 +17,16 @@ typedef struct {
 /**
  * Khởi tạo Middleware
  * @param middleware Con trỏ đến cấu trúc Middleware
- * @param fat_driver Con trỏ đến cấu trúc FATDriver
  * @return 0 nếu thành công, -1 nếu thất bại
  */
-int middleware_init(Middleware* middleware, FATDriver* fat_driver);
+int middleware_init(Middleware* middleware);
+
+/**
+ * Hủy Middleware
+ * @param middleware Con trỏ đến cấu trúc Middleware
+ * @return 0 nếu thành công, -1 nếu thất bại
+ */
+int middleware_denit(Middleware* middleware);
 
 /**
  * Xử lý lệnh ls (liệt kê nội dung thư mục)

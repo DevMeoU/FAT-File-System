@@ -19,6 +19,13 @@ typedef struct {
  */
 int hal_init(HAL* hal, const char* img_path, SectorSize sector_size);
 
+/** 
+ * Hủy bỏ HAL
+ * @param hal Con trỏ đến cấu trúc HAL
+ * @return 0 nếu thành công, -1 nếu thất bại
+ */
+int hal_deinit(HAL* hal);
+
 /**
  * Đọc một sector từ file ảnh
  * @param hal Con trỏ đến cấu trúc HAL
