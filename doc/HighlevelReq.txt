@@ -1,0 +1,78 @@
+Yêu cầu:
+read file system:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - 2 file name max: 255
+
+Tầng Application:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - Truyền vào file path phải là img file
+    - Truyền vào mode phải là read only hoặc read write
+
+Tầng Middleware:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - 2 file name max: 255
+
+Tầng FAT driver:
+    - 2 mode: read only, read write
+    - 2 type: FAT12, FAT16, FAT32
+    - 2 sector size: 512, 1024, 2048, 4096
+    - 2 cache size: 16, 32, 64, 128
+    - 2 dir name len: 8, 16, 32, 64
+    - 2 file name len: 255
+    - Kiểm tra thông số truyền vào
+    - read file system
+    - read mode: read only, read write
+    - Gọi tới HAL để đọc boot sector
+    - Lấy thông số từ HAL
+    - Tính toán các thông số cần thiết
+    - Tính toán các bảng FAT
+    - Tính toán các bảng root directory
+    - Tính toán các bảng file directory
+    - Tính toán các bảng file data
+
+
+Nếu path không tồn tại, chương trình sẽ hiển thị thông báo lỗi và thoát.
+Nếu path không phải là img file, chương trình sẽ hiển thị thông báo lỗi và thoát.
+Nếu read thành công, chương trình sẽ hiển thị thông báo và chuyển sang chế độ shell.
+Khi read thành công, nếu path truyền vào là '/' thì chương trình sẽ chuyển sang chế độ root.
+Khi read thành công, nếu path truyền vào không phải là '/' thì chương trình sẽ chuyển sang chế độ user.
+Khi chuyển sang chế độ root, chương trình sẽ hiển thị thông báo và chuyển sang chế độ root.
+Khi chuyển sang chế độ user, chương trình sẽ hiển thị thông báo và chuyển sang chế độ user.
+Khi read thành công, phân tích path để tìm ra đường dẫn thực sự của file hoặc thư mục.
+Khi read thành công, nếu path đang là '/' và command là 'ls' thì chương trình sẽ hiển thị toàn bộ file và thư mục trong root.
+Khi read thành công, nếu path đang là '/' và command là 'cd' thì kiểm tra xem path có phải là thư mục không, nếu không thì hiển thị thông báo lỗi và thoát.
+Khi read thành công, ví dụ path là '/abc/def', command là 'ls' thì chương trình sẽ hiển thị toàn bộ file và thư mục trong /abc/def.
+Khi read thành công, ví dụ path là '/abc/def', command là 'cd' thì kiểm tra xem path có phải là thư mục không, nếu không thì hiển thị thông báo lỗi và thoát.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd ..' hoặc 'cd ../' thì chuyển sang thư mục cha.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd ../abc' hoặc 'cd ../abc/' thì chuyển sang thư mục abc ở thư mục cha.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd ../abc/def' hoặc 'cd ../abc/def/' thì chuyển sang thư mục def ở thư mục abc ở thư mục cha.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd ../abc/def/ghi' hoặc 'cd ../abc/def/ghi/' thì chuyển sang thư mục ghi ở thư mục def ở thư mục abc ở thư mục cha.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd .' hoặc 'cd ./' thì chuyển sang thư mục hiện tại.
+Khi read thành công, ví dụ path đang không phải là '/' và command là 'cd /' thì chuyển sang thư mục root.
+
+mkdir -p src/{ip_driver,hal,fat_driver,middleware,application,utilities/linkedlist}
+
+
+
+
+
+
+
+
+
+
