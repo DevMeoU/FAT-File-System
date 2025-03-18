@@ -237,6 +237,8 @@ int main(int argc, char* argv[]) {
     }
     
     int result = application_run(&app);
-    
+
+    /* Back to script */
+    system("cd ../ && ./DTH.sh");
     return result == 0 ? 0 : 1;
 }
