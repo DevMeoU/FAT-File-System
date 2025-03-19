@@ -9,7 +9,17 @@ PROJECT_NAME := application
 #------------------
 # Công cụ build
 #------------------
-CC        := C:\cygwin64\bin\gcc.exe
+# Phát hiện hệ điều hành
+ifeq ($(OS),Windows_NT)
+    # Windows
+    CC := C:/cygwin64/bin/gcc.exe
+    # Các cài đặt Windows khác...
+else
+    # Linux/Unix
+    CC := /mnt/c/cygwin64/bin/gcc.exe
+    # Các cài đặt Linux khác...
+endif
+
 RM        := rm -rf
 MKDIR     := mkdir -p
 
