@@ -1,14 +1,23 @@
+/**
+ * @file middleware.c
+ * @brief Middleware implementation
+ * @details This file contains the implementation of middleware functions.
+ * @date 2023-10-15
+ * @author Le Duc Son
+ */
+
 #include "middleware.h"
 #include "../utilities/log/print_color.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/** Initialize the middleware */
 int middleware_init(Middleware* middleware) {
-    FATDriver* fat_driver = malloc(sizeof(FATDriver)); /* Khai báo cấu trúc Middleware */
+    FATDriver* fat_driver = malloc(sizeof(FATDriver)); /** Allocate FATDriver structure */
     if (!middleware || !fat_driver) return -1;
     
-    // Kiểm tra tham số đầu vào
+    /** Check input parameters */
     if (!middleware->img_path) {
         print_error("Image file path is required\n");
         return -1;
@@ -20,11 +29,11 @@ int middleware_init(Middleware* middleware) {
         return -1;
     }
     
-    // Cấu hình hệ thống tệp
+    /** Configure file system */
     FileSystemConfig config;
     config.img_path = middleware->img_path;
     config.mode = middleware->mode;
-    config.fat_type = FAT_TYPE_16; // Mặc định, sẽ được xác định lại trong fat_driver_mount
+    config.fat_type = FAT_TYPE_16; /** Default, will be determined in fat_driver_mount */
     config.sector_size = SECTOR_SIZE_512;
     config.cache_size = CACHE_SIZE_16;
     config.dir_name_len = DIR_NAME_LEN_8;
@@ -51,7 +60,7 @@ int middleware_init(Middleware* middleware) {
     strcpy(middleware->current_path, "/");
     middleware->is_root_mode = true;
     
-    // Chuyển chế độ dựa trên đường dẫn
+    /** Switch mode based on path */
     if (strcmp(middleware->current_path, "/") == 0) {
         middleware_switch_to_root_mode(middleware);
     } else {
@@ -60,6 +69,7 @@ int middleware_init(Middleware* middleware) {
     return 0;
 }
 
+/** Deinitialize the middleware */
 int middleware_denit(Middleware* middleware) {
     if (!middleware) return -1;
     
@@ -72,6 +82,7 @@ int middleware_denit(Middleware* middleware) {
     return 0;
 }
 
+/** List directory contents */
 int middleware_ls(Middleware* middleware) {
     if (!middleware || !middleware->current_directory) return -1;
     
@@ -125,7 +136,7 @@ int middleware_ls(Middleware* middleware) {
             strcpy(modified, "N/A");
         }
         
-        /* Print color for directories */
+        /** Print color for directories */
         print_color(current->type == FILE_TYPE_DIRECTORY ? COLOR_CYAN : COLOR_WHITE, "%-32s ", current->name);
         printf("%-12s %-12u %-20s %-20s\n",
                type_str, 
@@ -139,49 +150,80 @@ int middleware_ls(Middleware* middleware) {
     return 0;
 }
 
+/** Change directory */
 int middleware_cd(Middleware* middleware, const char* path) {
     if (!middleware || !path) return -1;
     
-    // Xử lý các trường hợp đặc biệt
+    /** Handle special cases */
     if (strcmp(path, "/") == 0) {
-        // Chuyển về thư mục gốc
+        /** Change to root directory */
         middleware->current_directory = fat_driver_get_root_directory(middleware->fat_driver);
         strcpy(middleware->current_path, "/");
         return 0;
     } else if (strcmp(path, ".") == 0 || strcmp(path, "./") == 0) {
-        // Giữ nguyên thư mục hiện tại
+        /** Stay in current directory */
         return 0;
     } else if (strcmp(path, "..") == 0 || strcmp(path, "../") == 0) {
-        // Chuyển về thư mục cha
+        /** Change to parent directory */
         if (middleware->current_directory->parent) {
             middleware->current_directory = middleware->current_directory->parent;
             
-            // Cập nhật đường dẫn hiện tại
+            /** Update current path */
             char* last_slash = strrchr(middleware->current_path, '/');
             if (last_slash && last_slash != middleware->current_path) {
-                *last_slash = '\0';
+                *last_slash = '\0';  // Remove last directory
             } else {
-                strcpy(middleware->current_path, "/");
+                strcpy(middleware->current_path, "/");  // Stay at root
             }
-            
             return 0;
         } else {
-            // Đã ở thư mục gốc
+            /** Already at root directory */
             return 0;
         }
     }
-    
-    /* Cập nhật được dẫn tạm thời */
-    char temp_path[256] = {0};
+
+    /** Copy current path for manipulation */
+    char temp_path[PATH_MAX];
     strcpy(temp_path, middleware->current_path);
-    if(middleware->current_path[strlen(middleware->current_path) - 1] != '/')
-    {
+
+    /** Append path to current path */
+    if (middleware->current_path[strlen(middleware->current_path) - 1] != '/') {
         strcat(temp_path, "/");
     }
     strcat(temp_path, path);
 
-    // Tìm thư mục theo đường dẫn
-    FileNode* target = fat_driver_find_path(middleware->fat_driver, temp_path);
+    /** Normalize path: Process "..", ".", and remove redundant slashes */
+    char normalized_path[PATH_MAX];
+    char* tokens[PATH_MAX / 2];
+    int token_count = 0;
+    
+    char* token = strtok(temp_path, "/");
+    while (token != NULL) {
+        if (strcmp(token, "..") == 0) {
+            /** Move up one level */
+            if (token_count > 0) {
+                token_count--;  // Remove last directory
+            }
+        } else if (strcmp(token, ".") != 0 && strcmp(token, "") != 0) {
+            /** Normal directory */
+            tokens[token_count++] = token;
+        }
+        token = strtok(NULL, "/");
+    }
+
+    /** Construct normalized path */
+    if (token_count == 0) {
+        strcpy(normalized_path, "/");
+    } else {
+        strcpy(normalized_path, "");
+        for (int i = 0; i < token_count; i++) {
+            strcat(normalized_path, "/");
+            strcat(normalized_path, tokens[i]);
+        }
+    }
+
+    /** Find target directory */
+    FileNode* target = fat_driver_find_path(middleware->fat_driver, normalized_path);
     
     if (!target) {
         print_error("Directory not found: %s\n", path);
@@ -193,60 +235,19 @@ int middleware_cd(Middleware* middleware, const char* path) {
         return -1;
     }
     
+    /** Update directory and path */
     middleware->current_directory = target;
-    
-    // Cập nhật đường dẫn hiện tại
-    if (path[0] == '/') {
-        // Đường dẫn tuyệt đối
-        strncpy(middleware->current_path, path, sizeof(middleware->current_path) - 1);
-        middleware->current_path[sizeof(middleware->current_path) - 1] = '\0'; // Đảm bảo kết thúc chuỗi
-    } else {
-        // Đường dẫn tương đối
-        size_t current_len = strlen(middleware->current_path);
-        size_t path_len = strlen(path);
-        if (current_len + 1 + path_len < sizeof(middleware->current_path)) {
-            if (strcmp(middleware->current_path, "/") == 0) {
-                strncat(middleware->current_path, path, sizeof(middleware->current_path) - current_len - 1);
-            } else {
-                strncat(middleware->current_path, "/", sizeof(middleware->current_path) - current_len - 1);
-                strncat(middleware->current_path, path, sizeof(middleware->current_path) - current_len - 1);
-            }
-        } else {
-            print_error("Path is too long\n");
-            return -1;
-        }
-    }
-    
-    // Chuẩn hóa đường dẫn (xóa các dấu / thừa)
-    char* p = middleware->current_path;
-    char* q = middleware->current_path;
-    
-    while (*p) {
-        if (*p == '/' && *(p+1) == '/') {
-            p++;
-        } else {
-            *q++ = *p++;
-        }
-    }
-    *q = '\0';
-    if (q > middleware->current_path && *(q-1) == '/') {
-        *(q-1) = '\0';
-    }
-    
-    if (middleware->current_path[0] == '\0') {
-        middleware->current_path[0] = '/';
-        middleware->current_path[1] = '\0';
-    }   
-    // In ra thông báo thành công
-    // print_success("Changed directory to: %s\n", middleware->current_path);
-    
+    strncpy(middleware->current_path, normalized_path, sizeof(middleware->current_path) - 1);
+    middleware->current_path[sizeof(middleware->current_path) - 1] = '\0'; /** Ensure null-terminated */
+
     return 0;
 }
 
+/** Concatenate and display file content */
 int middleware_cat(Middleware* middleware, const char* path) {
     if (!middleware || !path) return -1;
     
-    /* Cập nhật được dẫn tạm thời */
+    /** Update temporary path */
     char temp_path[256] = {0};
     strcpy(temp_path, middleware->current_path);
     if(middleware->current_path[strlen(middleware->current_path) - 1] != '/')
@@ -254,7 +255,7 @@ int middleware_cat(Middleware* middleware, const char* path) {
         strcat(temp_path, "/");
     }
     strcat(temp_path, path);
-    // Tìm file theo đường dẫn
+    /** Find file by path */
     FileNode* file = fat_driver_find_path(middleware->fat_driver, temp_path);
     
     if (!file) {
@@ -267,7 +268,7 @@ int middleware_cat(Middleware* middleware, const char* path) {
         return -1;
     }
     
-    // Đọc nội dung file
+    /** Read file content */
     uint8_t* buffer = malloc(file->size + 1);
     if (!buffer) {
         print_error("Memory allocation failed\n");
@@ -281,11 +282,10 @@ int middleware_cat(Middleware* middleware, const char* path) {
         return -1;
     }
     
-    // Thêm ký tự kết thúc chuỗi
+    /** Add null-terminator */
     buffer[bytes_read] = '\0';
     
-    // In nội dung file
-    // print_color(COLOR_YELLOW, "%s\n", buffer);
+    /** Print file content */
     for (int i = 0; i < bytes_read; i++)
     {
         print_color(COLOR_YELLOW, "%c", buffer[i]);
@@ -293,34 +293,21 @@ int middleware_cat(Middleware* middleware, const char* path) {
     printf("\n");
     fflush(stdout);
     
-    
-    // In nội dung file dưới dạng hex
-    // for(int i = 0, j = 0; i < bytes_read; i++, j++)
-    // {
-    //     if(j % 16 == 0 && j != 0)
-    //     {
-    //         printf("\n");
-    //         j = 0;
-    //     }
-    //     print_color(COLOR_YELLOW, "%02X ", buffer[i]);
-    //     fflush(stdout);
-    // }
-    // printf("\n");
-    
     free(buffer);
     return 0;
 }
 
+/** Display file system evidence */
 int middleware_evidence(Middleware* middleware) {
     if (!middleware) return -1;
     
     FATDriver* driver = middleware->fat_driver;
     if (!driver) return -1;
     
-    // Hiển thị thông tin hệ thống tệp
+    /** Display file system information */
     print_info("File System Information:\n");
     
-    // Loại FAT
+    /** FAT Type */
     const char* fat_type_str = "Unknown";
     switch (fat_driver_get_fat_type(driver)) {
         case FAT_TYPE_12: fat_type_str = "FAT12"; break;
@@ -330,7 +317,7 @@ int middleware_evidence(Middleware* middleware) {
     }
     printf("FAT Type: %s\n", fat_type_str);
     
-    // Thông tin từ boot sector
+    /** Boot sector information */
     printf("Bytes per Sector: %u\n", driver->boot_sector.bytes_per_sector);
     printf("Sectors per Cluster: %u\n", driver->boot_sector.sectors_per_cluster);
     printf("Reserved Sectors: %u\n", driver->boot_sector.reserved_sectors);
@@ -354,7 +341,7 @@ int middleware_evidence(Middleware* middleware) {
         printf("Root Cluster: %u\n", driver->boot_sector.root_cluster);
     }
     
-    // Thông tin về kích thước
+    /** Size information */
     uint64_t total_size, free_size;
     if (fat_driver_get_filesystem_info(driver, &total_size, &free_size) == 0) {
         printf("Total Size: %llu bytes\n", (unsigned long long)total_size);
@@ -362,7 +349,7 @@ int middleware_evidence(Middleware* middleware) {
         printf("Used Size: %llu bytes\n", (unsigned long long)(total_size - free_size));
     }
     
-    // Thông tin về cấu hình
+    /** Configuration information */
     printf("\nConfiguration:\n");
     
     const char* mode_str = "Unknown";
@@ -379,6 +366,7 @@ int middleware_evidence(Middleware* middleware) {
     return 0;
 }
 
+/** Switch to root mode */
 int middleware_switch_to_root_mode(Middleware* middleware) {
     if (!middleware) return -1;
     
@@ -390,6 +378,7 @@ int middleware_switch_to_root_mode(Middleware* middleware) {
     return 0;
 }
 
+/** Switch to user mode */
 int middleware_switch_to_user_mode(Middleware* middleware) {
     if (!middleware) return -1;
     
@@ -399,14 +388,17 @@ int middleware_switch_to_user_mode(Middleware* middleware) {
     return 0;
 }
 
+/** Get current path */
 const char* middleware_get_current_path(Middleware* middleware) {
     if (!middleware) return NULL;
     
     return middleware->current_path;
 }
 
+/** Check if in root mode */
 bool middleware_is_root_mode(Middleware* middleware) {
     if (!middleware) return false;
     
     return middleware->is_root_mode;
 }
+

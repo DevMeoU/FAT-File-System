@@ -1,7 +1,14 @@
+/**
+ * @file ip_driver_private.h
+ * @author Le Duc Son (sonld@hselab.com)
+ * @date 2020-11-24
+ * @brief IP Driver internal definitions and declarations
+ * @details This file contains internal constants, macros and data structures
+ *          used only by IP Driver
+ */
+
 #ifndef IP_DRIVER_PRIVATE_H
 #define IP_DRIVER_PRIVATE_H
 
-// Các định nghĩa và khai báo nội bộ cho IP Driver
-// File này chứa các hằng số, macro và cấu trúc dữ liệu chỉ sử dụng nội bộ trong IP Driver
-
 #endif // IP_DRIVER_PRIVATE_H
+

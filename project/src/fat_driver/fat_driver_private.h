@@ -4,37 +4,43 @@
 #include "fat_driver_types.h"
 #include "../hal/hal.h"
 
-// Các hằng số và macro cho FAT Driver
-#define FAT12_EOC 0xFFF      // End of cluster chain cho FAT12
-#define FAT16_EOC 0xFFFF     // End of cluster chain cho FAT16
-#define FAT32_EOC 0x0FFFFFFF // End of cluster chain cho FAT32
+/**
+ * Constants and macros for FAT Driver
+ */
+#define FAT12_EOC 0xFFF      /**< End of cluster chain for FAT12 */
+#define FAT16_EOC 0xFFFF     /**< End of cluster chain for FAT16 */
+#define FAT32_EOC 0x0FFFFFFF /**< End of cluster chain for FAT32 */
 
-#define FAT_ATTR_READ_ONLY  0x01
-#define FAT_ATTR_HIDDEN     0x02
-#define FAT_ATTR_SYSTEM     0x04
-#define FAT_ATTR_VOLUME_ID  0x08
-#define FAT_ATTR_DIRECTORY  0x10
-#define FAT_ATTR_ARCHIVE    0x20
-#define FAT_ATTR_LFN        0x0F  // Thuộc tính cho Long File Name
+#define FAT_ATTR_READ_ONLY  0x01 /**< Read-only attribute */
+#define FAT_ATTR_HIDDEN     0x02 /**< Hidden attribute */
+#define FAT_ATTR_SYSTEM     0x04 /**< System attribute */
+#define FAT_ATTR_VOLUME_ID  0x08 /**< Volume ID attribute */
+#define FAT_ATTR_DIRECTORY  0x10 /**< Directory attribute */
+#define FAT_ATTR_ARCHIVE    0x20 /**< Archive attribute */
+#define FAT_ATTR_LFN        0x0F /**< Long File Name attribute */
 
-// Cấu trúc entry trong thư mục FAT
+/**
+ * Structure for a FAT directory entry
+ */
 typedef struct {
-    uint8_t name[8];           // Tên file (8 ký tự)
-    uint8_t ext[3];            // Phần mở rộng (3 ký tự)
-    uint8_t attributes;        // Thuộc tính file
-    uint8_t reserved;          // Dành riêng cho Windows NT
-    uint8_t create_time_tenth; // Phần thập phân của thời gian tạo (0-199)
-    uint16_t create_time;      // Thời gian tạo
-    uint16_t create_date;      // Ngày tạo
-    uint16_t last_access_date; // Ngày truy cập cuối
-    uint16_t first_cluster_high; // Cluster đầu tiên (high word, chỉ dùng cho FAT32)
-    uint16_t write_time;       // Thời gian sửa đổi
-    uint16_t write_date;       // Ngày sửa đổi
-    uint16_t first_cluster_low; // Cluster đầu tiên (low word)
-    uint32_t file_size;        // Kích thước file (byte)
+    uint8_t name[8];           /**< File name (8 characters) */
+    uint8_t ext[3];            /**< File extension (3 characters) */
+    uint8_t attributes;        /**< File attributes */
+    uint8_t reserved;          /**< Reserved for Windows NT */
+    uint8_t create_time_tenth; /**< Time created (tenths of a second) */
+    uint16_t create_time;      /**< Time created */
+    uint16_t create_date;      /**< Date created */
+    uint16_t last_access_date; /**< Date last accessed */
+    uint16_t first_cluster_high; /**< First cluster (high word, only for FAT32) */
+    uint16_t write_time;       /**< Time last modified */
+    uint16_t write_date;       /**< Date last modified */
+    uint16_t first_cluster_low; /**< First cluster (low word) */
+    uint32_t file_size;        /**< File size (bytes) */
 } FATDirEntry;
 
-// Các hàm nội bộ cho FAT Driver
+/**
+ * Internal functions for FAT Driver
+ */
 // void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* buffer);
 // int fat_driver_load_fat_table(FATDriver* driver);
 // int fat_driver_load_root_directory(FATDriver* driver);
@@ -45,3 +51,4 @@ uint32_t fat_driver_get_fat_entry(FATDriver* driver, uint32_t cluster);
 void fat_driver_fill_file_node(FATDriver* driver, FileNode* node, const FATDirEntry* entry);
 
 #endif // FAT_DRIVER_PRIVATE_H
+

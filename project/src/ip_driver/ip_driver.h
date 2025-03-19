@@ -1,3 +1,11 @@
+/**
+ * @file ip_driver.h
+ * @author Le Duc Son (sonld@hselab.com)
+ * @date 2020-11-24
+ * @brief IP Driver interface
+ * @details This file contains the interface for IP Driver module
+ */
+
 #ifndef IP_DRIVER_H
 #define IP_DRIVER_H
 
@@ -5,41 +13,45 @@
 #include <stdint.h>
 #include "../common/common_types.h"
 
+/**
+ * IP Driver structure
+ */
 typedef struct {
-    FILE* img_file;
-    uint32_t buffer_size;
+    FILE* img_file; /**< File pointer to image file */
+    uint32_t buffer_size; /**< Buffer size to read/write data */
 } IPDriver;
 
 /**
- * Khởi tạo IP Driver
- * @param driver Con trỏ đến cấu trúc IPDriver
- * @param img_path Đường dẫn đến file ảnh
- * @return 0 nếu thành công, -1 nếu thất bại
+ * Initialize IP Driver
+ * @param driver Pointer to IPDriver structure
+ * @param img_path Path to image file
+ * @return 0 if success, -1 if failed
  */
 int ip_driver_init(IPDriver* driver, const char* img_path);
 
 /**
- * Đọc một sector từ file ảnh
- * @param driver Con trỏ đến cấu trúc IPDriver
- * @param offset Số thứ tự sector cần đọc
- * @param buffer Buffer để lưu dữ liệu đọc được
- * @return Số byte đọc được nếu thành công, -1 nếu thất bại
+ * Read a sector from image file
+ * @param driver Pointer to IPDriver structure
+ * @param offset Sector number to read
+ * @param buffer Buffer to store read data
+ * @return Number of bytes read if success, -1 if failed
  */
 int ip_driver_read_sector(IPDriver* driver, uint32_t offset, void* buffer);
 
 /**
- * Ghi một sector vào file ảnh
- * @param driver Con trỏ đến cấu trúc IPDriver
- * @param offset Số thứ tự sector cần ghi
- * @param buffer Buffer chứa dữ liệu cần ghi
- * @return Số byte ghi được nếu thành công, -1 nếu thất bại
+ * Write a sector to image file
+ * @param driver Pointer to IPDriver structure
+ * @param offset Sector number to write
+ * @param buffer Buffer containing data to write
+ * @return Number of bytes written if success, -1 if failed
  */
 int ip_driver_write_sector(IPDriver* driver, uint32_t offset, const void* buffer);
 
 /**
- * Đóng IP Driver
- * @param driver Con trỏ đến cấu trúc IPDriver
+ * Close IP Driver
+ * @param driver Pointer to IPDriver structure
  */
 void ip_driver_close(IPDriver* driver);
 
 #endif
+

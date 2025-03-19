@@ -1,7 +1,17 @@
+/**
+ * @file print_color.h
+ * @brief Header file for print_color.c
+ * @author Le Duc Son
+ * @date 2022-04-20
+ * @updated 2025-03-19
+ */
+
 #ifndef PRINT_COLOR_H
 #define PRINT_COLOR_H
 
-// Định nghĩa các mã màu ANSI
+/**
+ * ANSI color codes
+ */
 #define COLOR_RESET   "\033[0m"
 #define COLOR_BLACK   "\033[30m"
 #define COLOR_RED     "\033[31m"
@@ -13,42 +23,42 @@
 #define COLOR_WHITE   "\033[37m"
 
 #define COLOR_BOLD    "\033[1m"
-#define COLOR_ITALIC "\033[3m"
+#define COLOR_ITALIC  "\033[3m"
 #define COLOR_UNDERLINE "\033[4m"
 
 /**
- * In chuỗi với màu chỉ định
- * @param color Mã màu ANSI
- * @param format Chuỗi định dạng
- * @param ... Các tham số bổ sung
+ * Print a formatted string with a specified color
+ * @param color ANSI color code
+ * @param format Format string
+ * @param ... Additional arguments
  */
 void print_color(const char* color, const char* format, ...);
 
 /**
- * In thông báo lỗi (màu đỏ)
- * @param format Chuỗi định dạng
- * @param ... Các tham số bổ sung
+ * Print an error message in red color
+ * @param format Format string
+ * @param ... Additional arguments
  */
 void print_error(const char* format, ...);
 
 /**
- * In thông báo thành công (màu xanh lá)
- * @param format Chuỗi định dạng
- * @param ... Các tham số bổ sung
+ * Print a success message in green color
+ * @param format Format string
+ * @param ... Additional arguments
  */
 void print_success(const char* format, ...);
 
 /**
- * In thông báo cảnh báo (màu vàng)
- * @param format Chuỗi định dạng
- * @param ... Các tham số bổ sung
+ * Print a warning message in yellow color
+ * @param format Format string
+ * @param ... Additional arguments
  */
 void print_warning(const char* format, ...);
 
 /**
- * In thông báo thông tin (màu xanh dương)
- * @param format Chuỗi định dạng
- * @param ... Các tham số bổ sung
+ * Print an info message in blue color
+ * @param format Format string
+ * @param ... Additional arguments
  */
 void print_info(const char* format, ...);
 

@@ -1,97 +1,111 @@
+/**
+ * @file linkedlist.h
+ * @author Le Duc Son
+ * @date 2018-11-21
+ * @brief Header file for linked list
+ */
+
 #ifndef LINKEDLIST_H
 #define LINKEDLIST_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
-// Cấu trúc node trong danh sách liên kết
+/**
+ * @struct ListNode
+ * @brief Node structure for linked list
+ */
 typedef struct ListNode {
-    void* data;                  // Con trỏ đến dữ liệu
-    struct ListNode* next;       // Con trỏ đến node tiếp theo
+    void* data;                  /**< Pointer to data */
+    struct ListNode* next;       /**< Pointer to next node */
 } ListNode;
 
-// Cấu trúc danh sách liên kết
+/**
+ * @struct LinkedList
+ * @brief Linked list structure
+ */
 typedef struct {
-    ListNode* head;              // Con trỏ đến node đầu tiên
-    ListNode* tail;              // Con trỏ đến node cuối cùng
-    uint32_t size;               // Số lượng node trong danh sách
-    void (*free_data)(void*);    // Hàm giải phóng dữ liệu
+    ListNode* head;              /**< Pointer to first node */
+    ListNode* tail;              /**< Pointer to last node */
+    uint32_t size;               /**< Number of nodes in list */
+    void (*free_data)(void*);     /**< Function to free data */
 } LinkedList;
 
 /**
- * Khởi tạo danh sách liên kết
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param free_data Hàm giải phóng dữ liệu (có thể NULL)
- * @return true nếu thành công, false nếu thất bại
+ * @brief Initialize linked list
+ * @param list Pointer to LinkedList structure
+ * @param free_data Function to free data (can be NULL)
+ * @return true if success, false if failed
  */
 bool linkedlist_init(LinkedList* list, void (*free_data)(void*));
 
 /**
- * Thêm node vào cuối danh sách
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param data Con trỏ đến dữ liệu
- * @return true nếu thành công, false nếu thất bại
+ * @brief Append node to end of list
+ * @param list Pointer to LinkedList structure
+ * @param data Pointer to data
+ * @return true if success, false if failed
  */
 bool linkedlist_append(LinkedList* list, void* data);
 
 /**
- * Thêm node vào đầu danh sách
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param data Con trỏ đến dữ liệu
- * @return true nếu thành công, false nếu thất bại
+ * @brief Prepend node to beginning of list
+ * @param list Pointer to LinkedList structure
+ * @param data Pointer to data
+ * @return true if success, false if failed
  */
 bool linkedlist_prepend(LinkedList* list, void* data);
 
 /**
- * Lấy node tại vị trí chỉ định
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param index Vị trí cần lấy
- * @return Con trỏ đến node nếu thành công, NULL nếu thất bại
+ * @brief Get node at index
+ * @param list Pointer to LinkedList structure
+ * @param index Index of node to get
+ * @return Pointer to node if success, NULL if failed
  */
 ListNode* linkedlist_get_node(LinkedList* list, uint32_t index);
 
 /**
- * Lấy dữ liệu tại vị trí chỉ định
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param index Vị trí cần lấy
- * @return Con trỏ đến dữ liệu nếu thành công, NULL nếu thất bại
+ * @brief Get data at index
+ * @param list Pointer to LinkedList structure
+ * @param index Index of data to get
+ * @return Pointer to data if success, NULL if failed
  */
 void* linkedlist_get(LinkedList* list, uint32_t index);
 
 /**
- * Xóa node tại vị trí chỉ định
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param index Vị trí cần xóa
- * @return true nếu thành công, false nếu thất bại
+ * @brief Remove node at index
+ * @param list Pointer to LinkedList structure
+ * @param index Index of node to remove
+ * @return true if success, false if failed
  */
 bool linkedlist_remove(LinkedList* list, uint32_t index);
 
 /**
- * Xóa toàn bộ danh sách
- * @param list Con trỏ đến cấu trúc LinkedList
+ * @brief Clear linked list
+ * @param list Pointer to LinkedList structure
  */
 void linkedlist_clear(LinkedList* list);
 
 /**
- * Lấy kích thước danh sách
- * @param list Con trỏ đến cấu trúc LinkedList
- * @return Số lượng node trong danh sách
+ * @brief Get size of linked list
+ * @param list Pointer to LinkedList structure
+ * @return Number of nodes in list
  */
 uint32_t linkedlist_size(LinkedList* list);
 
 /**
- * Kiểm tra danh sách có rỗng không
- * @param list Con trỏ đến cấu trúc LinkedList
- * @return true nếu danh sách rỗng, false nếu không
+ * @brief Check if linked list is empty
+ * @param list Pointer to LinkedList structure
+ * @return true if list is empty, false if not
  */
 bool linkedlist_is_empty(LinkedList* list);
 
 /**
- * Duyệt danh sách và áp dụng hàm callback cho mỗi node
- * @param list Con trỏ đến cấu trúc LinkedList
- * @param callback Hàm callback
- * @param user_data Dữ liệu người dùng truyền vào callback
+ * @brief Iterate linked list and apply callback for each node
+ * @param list Pointer to LinkedList structure
+ * @param callback Callback function
+ * @param user_data User data to pass to callback
  */
 void linkedlist_foreach(LinkedList* list, void (*callback)(void* data, void* user_data), void* user_data);
 
 #endif // LINKEDLIST_H
+

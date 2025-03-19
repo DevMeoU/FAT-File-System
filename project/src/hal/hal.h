@@ -1,3 +1,11 @@
+/**
+ * @file hal.h
+ * @author Le Duc Son (sonld@hselab.com)
+ * @date 2020-11-24
+ * @brief HAL (Hardware Abstraction Layer) interface
+ * @details This file contains the interface for HAL module
+ */
+
 #ifndef HAL_H
 #define HAL_H
 
@@ -5,56 +13,67 @@
 #include "../common/common_types.h"
 #include "../ip_driver/ip_driver.h"
 
+/**
+ * Structure representing HAL
+ */
 typedef struct {
+    /**
+     * Pointer to IPDriver structure
+     */
     IPDriver ip_driver;
+
+    /**
+     * Sector size
+     */
     SectorSize sector_size;
 } HAL;
 
 /**
- * Khởi tạo HAL
- * @param hal Con trỏ đến cấu trúc HAL
- * @param img_path Đường dẫn đến file ảnh
- * @param sector_size Kích thước sector
- * @return 0 nếu thành công, -1 nếu thất bại
+ * Initialize HAL
+ * @param hal Pointer to HAL structure
+ * @param img_path Path to image file
+ * @param sector_size Sector size
+ * @return 0 if success, -1 if failed
  */
 int hal_init(HAL* hal, const char* img_path, SectorSize sector_size);
 
-/** 
- * Hủy bỏ HAL
- * @param hal Con trỏ đến cấu trúc HAL
- * @return 0 nếu thành công, -1 nếu thất bại
+/**
+ * Deinitialize HAL
+ * @param hal Pointer to HAL structure
+ * @return 0 if success, -1 if failed
  */
 int hal_deinit(HAL* hal);
 
 /**
- * Đọc một sector từ file ảnh
- * @param hal Con trỏ đến cấu trúc HAL
- * @param sector_number Số thứ tự sector cần đọc
- * @param buffer Buffer để lưu dữ liệu đọc được
- * @return Số byte đọc được nếu thành công, -1 nếu thất bại
+ * Read a sector from image file
+ * @param hal Pointer to HAL structure
+ * @param sector_number Sector number to read
+ * @param buffer Buffer to store read data
+ * @return Number of bytes read if success, -1 if failed
  */
 int hal_read_sector(HAL* hal, uint32_t sector_number, void* buffer);
 
 /**
- * Ghi một sector vào file ảnh
- * @param hal Con trỏ đến cấu trúc HAL
- * @param sector_number Số thứ tự sector cần ghi
- * @param buffer Buffer chứa dữ liệu cần ghi
- * @return Số byte ghi được nếu thành công, -1 nếu thất bại
+ * Write a sector to image file
+ * @param hal Pointer to HAL structure
+ * @param sector_number Sector number to write
+ * @param buffer Buffer containing data to write
+ * @return Number of bytes written if success, -1 if failed
  */
 int hal_write_sector(HAL* hal, uint32_t sector_number, const void* buffer);
 
 /**
- * Đóng HAL
- * @param hal Con trỏ đến cấu trúc HAL
+ * Close HAL
+ * @param hal Pointer to HAL structure
  */
 void hal_close(HAL* hal);
 
 /**
- * Lấy kích thước sector
- * @param hal Con trỏ đến cấu trúc HAL
- * @return Kích thước sector
+ * Get sector size
+ * @param hal Pointer to HAL structure
+ * @return Sector size
  */
 uint32_t hal_get_sector_size(HAL* hal);
 
 #endif // HAL_H
+

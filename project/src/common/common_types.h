@@ -1,18 +1,31 @@
+/**
+ * @file common_types.h
+ * @author Le Duc Son (son.leduc92@gmail.com)
+ * @date 2019-07-25
+ * @brief This file contains common types for whole system
+ */
+
 #ifndef COMMON_TYPES_H
 #define COMMON_TYPES_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
-// Định nghĩa các kiểu dữ liệu chung cho toàn bộ hệ thống
+/**
+ * Defines common types for whole system
+ */
 
-// Các mode hỗ trợ
+/**
+ * File system mode
+ */
 typedef enum {
     MODE_READ_ONLY,
     MODE_READ_WRITE
 } FileSystemMode;
 
-// Các loại FAT hỗ trợ
+/**
+ * FAT type
+ */
 typedef enum {
     FAT_TYPE_12,
     FAT_TYPE_16,
@@ -20,7 +33,9 @@ typedef enum {
     FAT_TYPE_UNKNOWN
 } FatType;
 
-// Các kích thước sector hỗ trợ
+/**
+ * Sector size
+ */
 typedef enum {
     SECTOR_SIZE_512 = 512,
     SECTOR_SIZE_1024 = 1024,
@@ -28,7 +43,9 @@ typedef enum {
     SECTOR_SIZE_4096 = 4096
 } SectorSize;
 
-// Các kích thước cache hỗ trợ
+/**
+ * Cache size
+ */
 typedef enum {
     CACHE_SIZE_16 = 16,
     CACHE_SIZE_32 = 32,
@@ -36,7 +53,9 @@ typedef enum {
     CACHE_SIZE_128 = 128
 } CacheSize;
 
-// Các độ dài tên thư mục hỗ trợ
+/**
+ * Directory name length
+ */
 typedef enum {
     DIR_NAME_LEN_8 = 8,
     DIR_NAME_LEN_16 = 16,
@@ -44,11 +63,15 @@ typedef enum {
     DIR_NAME_LEN_64 = 64
 } DirNameLength;
 
-// Độ dài tên file và số ký tự tối đa
+/**
+ * Max length of file name
+ */
 #define FILE_NAME_LEN 255
 #define FILE_NAME_MAX 255
 
-// Cấu trúc cấu hình hệ thống
+/**
+ * File system configuration
+ */
 typedef struct {
     const char * img_path;
     FileSystemMode mode;
@@ -58,7 +81,9 @@ typedef struct {
     DirNameLength dir_name_len;
 } FileSystemConfig;
 
-// Kiểu dữ liệu cho thời gian
+/**
+ * Date time
+ */
 typedef struct {
     uint16_t year;
     uint8_t month;
@@ -68,7 +93,9 @@ typedef struct {
     uint8_t second;
 } DateTime;
 
-// Kiểu file
+/**
+ * File type
+ */
 typedef enum {
     FILE_TYPE_REGULAR,
     FILE_TYPE_DIRECTORY,
@@ -76,7 +103,9 @@ typedef enum {
     FILE_TYPE_UNKNOWN
 } FileType;
 
-// Thuộc tính file
+/**
+ * File attributes
+ */
 typedef struct {
     bool read_only;
     bool hidden;
@@ -87,3 +116,4 @@ typedef struct {
 } FileAttributes;
 
 #endif // COMMON_TYPES_H
+

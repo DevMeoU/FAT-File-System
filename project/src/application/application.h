@@ -1,3 +1,10 @@
+/**
+ * @file application.h
+ * @author Le Duc Son
+ * @date 2022-04-20
+ * @brief Header file for Application
+ */
+
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
@@ -9,6 +16,9 @@
 #include "../common/common_types.h"
 #include "../middleware/middleware.h"
 
+/**
+ * @brief Application structure
+ */
 typedef struct {
     Middleware* middleware;
     char env_path[500];
@@ -16,70 +26,78 @@ typedef struct {
 } Application;
 
 /**
- * Khởi tạo Application
- * @param app Con trỏ đến cấu trúc Application
- * @return 0 nếu thành công, -1 nếu thất bại
+ * @brief Initialize Application
+ * @param app Pointer to Application structure
+ * @return 0 if success, -1 if fail
  */
 int application_init(Application* app, Middleware* middleware);
 
 /**
- * Hiển thị prompt
- * @param app Con trỏ đến cấu trúc Application
+ * @brief Deinitialize Application
+ * @param app Pointer to Application structure
+ * @return 0 if success, -1 if fail
+ */
+int application_denit(Application* app);
+
+/**
+ * @brief Display prompt
+ * @param app Pointer to Application structure
  */
 void display_prompt(Application* app);
 
 /**
- * Chạy ứng dụng
- * @param app Con trỏ đến cấu trúc Application
- * @param img_path Đường dẫn đến file ảnh
- * @param mode Chế độ (read-only hoặc read-write)
- * @return 0 nếu thành công, -1 nếu thất bại
+ * @brief Run Application
+ * @param app Pointer to Application structure
+ * @param img_path Path to image file
+ * @param mode Mode (read-only or read-write)
+ * @return 0 if success, -1 if fail
  */
 int application_run(Application* app);
 
 /**
- * Xử lý lệnh từ người dùng
- * @param app Con trỏ đến cấu trúc Application
- * @param command Lệnh cần xử lý
- * @return 0 nếu thành công, -1 nếu thất bại
+ * @brief Process command from user
+ * @param app Pointer to Application structure
+ * @param command Command to process
+ * @return 0 if success, -1 if fail
  */
 char* trim(char* str);
 
 /**
- * Hàm thay thế strtok_r()
- * @param str Chuỗi cần tách
- * @param delim Ký tự phân cách
- * @param saveptr Con trỏ lưu vị trí tách
- * @return Chuỗi tách được
+ * @brief Custom strtok_r()
+ * @param str String to split
+ * @param delim Delimiter
+ * @param saveptr Pointer to save position
+ * @return Split string
  */
 char *custom_strtok_r(char *str, const char *delim, char **saveptr);
 
 /**
- * Xử lý lệnh từ người dùng
- * @param app Con trỏ đến cấu trúc Application
- * @param command Lệnh cần xử lý
- * @return 0 nếu thành công, -1 nếu thất bại
+ * @brief Process command from user
+ * @param app Pointer to Application structure
+ * @param command Command to process
+ * @return 0 if success, -1 if fail
  */
 int process_command_with_and(Application* app, const char* command);
 
 /**
- * Xử lý lệnh từ người dùng
- * @param app Con trỏ đến cấu trúc Application
- * @param command Lệnh cần xử lý
- * @return 0 nếu thành công, -1 nếu thất bại
+ * @brief Process command from user
+ * @param app Pointer to Application structure
+ * @param command Command to process
+ * @return 0 if success, -1 if fail
  */
 int application_process_command(Application* app, const char* command);
 
 /**
- * Hiển thị trợ giúp
- * @param app Con trỏ đến cấu trúc Application
+ * @brief Show help
+ * @param app Pointer to Application structure
  */
 void application_show_help(Application* app);
 
 /**
- * Dừng ứng dụng
- * @param app Con trỏ đến cấu trúc Application
+ * @brief Stop Application
+ * @param app Pointer to Application structure
  */
 void application_stop(Application* app);
 
 #endif // APPLICATION_H
+
