@@ -184,6 +184,12 @@ function handle_user_choice() {
         9) flag_exit=true; echo -e "${RED}   Đang thoát shell...${NC}"; return ;;  # Thoát ngay lập tức
         *) echo -e "${RED}Lựa chọn không hợp lệ, vui lòng thử lại!${NC}" ;;
     esac
+    press_any_key;
+}
+
+function press_any_key() {
+    read -n 1 -s -r -p "Press any key to continue..."
+    echo  # in dòng mới sau khi nhấn phím
 }
 
 function handle_config_choice() {

@@ -16,7 +16,7 @@ ifeq ($(OS),Windows_NT)
     # Các cài đặt Windows khác...
 else
     # Linux/Unix
-    CC := /mnt/c/cygwin64/bin/gcc.exe
+    CC := gcc
     # Các cài đặt Linux khác...
 endif
 

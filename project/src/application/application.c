@@ -217,7 +217,8 @@ int application_process_command(Application* app, const char* command) {
     } else if (strcmp(cmd, "evidence") == 0) {
         return middleware_evidence(app->middleware);
     } else if (strcmp(cmd, "cls") == 0 || strcmp(cmd, "clear") == 0) {
-        system("clear");
+        int ret = system("clear");
+        (void)ret; /* Avoid unused variable warning */
         return 0;
     } else if (strcmp(cmd, "help") == 0) {
         application_show_help(app);
