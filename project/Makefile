@@ -98,15 +98,20 @@ TARGET := $(BIN_DIR)/$(PROJECT_NAME)$(EXE_EXT)
 #------------------
 # Image Files
 #------------------
-IMAGE_FILES := $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img)
+# Find and sort all .img files in the images directory
+IMAGE_FILES := $(sort $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img))
 
-# Number to access image
+# Number to access image (default to 1)
 IMAGE_NUM ?= 1
 
-# Select image file automatically (supports multiple files)
-FILE_IMAGE := $(word $(IMAGE_NUM), $(IMAGE_FILES))
+# Select image file: 
+# 1. Use FILE_IMAGE if already defined (via command line)
+# 2. Otherwise, use IMAGE_NUM to pick from the sorted list
+ifeq ($(FILE_IMAGE),)
+    FILE_IMAGE := $(word $(IMAGE_NUM), $(IMAGE_FILES))
+endif
 
-$(info Using image file: $(FILE_IMAGE))
+$(info [INFO] Using image file: $(FILE_IMAGE))
 
 #------------------
 # Modes

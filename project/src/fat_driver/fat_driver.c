@@ -6,6 +6,7 @@
  */
 #include "fat_driver.h"
 #include "fat_driver_private.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -73,6 +74,8 @@ int fat_driver_mount(FATDriver* driver) {
     /* Read boot sector */
     uint32_t bytes_read = hal_read_sector(driver->hal, 0, boot_sector_buffer);
     if (bytes_read != (uint32_t)hal_get_sector_size(driver->hal)) {
+        printf("[DEBUG] Error: hal_read_sector failed. bytes_read=%u, expected=%u\n", bytes_read, hal_get_sector_size(driver->hal));
+        fflush(stdout);
         free(boot_sector_buffer);
         return -1;
     }
@@ -81,9 +84,22 @@ int fat_driver_mount(FATDriver* driver) {
     fat_driver_parse_boot_sector(driver, boot_sector_buffer);
     free(boot_sector_buffer);
     
+    printf("[DEBUG] BPS: %u, SPC: %u, RS: %u, NF: %u, REC: %u, FS16: %u, FS32: %u\n",
+           driver->boot_sector.bytes_per_sector,
+           driver->boot_sector.sectors_per_cluster,
+           driver->boot_sector.reserved_sectors,
+           driver->boot_sector.number_of_fats,
+           driver->boot_sector.root_entry_count,
+           driver->boot_sector.fat_size_16,
+           driver->boot_sector.fat_size_32);
+    fflush(stdout);
+    
     /* Validate critical parameters to avoid division by zero and invalid memory access */
     if (driver->boot_sector.bytes_per_sector == 0 || 
         driver->boot_sector.sectors_per_cluster == 0) {
+        printf("[DEBUG] Error: Invalid critical parameters. BPS=%u, SPC=%u\n", 
+               driver->boot_sector.bytes_per_sector, 
+               driver->boot_sector.sectors_per_cluster);
         return -1;
     }
     
@@ -125,10 +141,14 @@ int fat_driver_mount(FATDriver* driver) {
                                 driver->root_dir_sectors);
 
     if (total_sectors < metadata_sectors) {
+        printf("[DEBUG] Error: total_sectors (%u) < metadata_sectors (%u)\n", total_sectors, metadata_sectors);
+        fflush(stdout);
         return -1; /* Invalid file system size */
     }
     
     driver->data_sectors = total_sectors - metadata_sectors;
+    printf("[DEBUG] total_sectors: %u, metadata_sectors: %u, data_sectors: %u\n", total_sectors, metadata_sectors, driver->data_sectors);
+    fflush(stdout);
     
     /* Calculate total clusters */
     driver->total_clusters = driver->data_sectors / 
@@ -137,6 +157,7 @@ int fat_driver_mount(FATDriver* driver) {
     
     /* Initialize root directory (node only) */
     if (fat_driver_load_root_directory(driver) != 0) {
+        printf("[DEBUG] Error: fat_driver_load_root_directory failed\n");
         return -1;
     }
     

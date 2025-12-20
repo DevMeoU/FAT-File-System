@@ -104,7 +104,8 @@ EOF
 }
 
 function load_image_files() {
-    img_files=($(ls "$IMAGE_DIR"/*.img 2>/dev/null))
+    # Force ASCII sorting to match Makefile
+    img_files=($(LC_COLLATE=C ls "$IMAGE_DIR"/*.img 2>/dev/null))
     if [ ${#img_files[@]} -eq 0 ]; then
         image_file=""
         return
@@ -125,6 +126,7 @@ function show_info() {
     echo -e "   Auto Run:                   ${ORANGE}$auto_run${NC}"
     echo -e "   Auto Clean:                 ${ORANGE}$auto_clean${NC}"
     echo -e "   Image Number:               ${INDIGO}$img_num${NC}"
+    echo -e "   Image File:                 ${CYAN}$(basename "$image_file")${NC}"
     echo
 }
 
@@ -156,7 +158,7 @@ function show_menu() {
 
 function build() {
     print_status "$GREEN" "$STR_BUILDING"
-    (cd "$PROJECT_DIR" && $MAKE_CMD all)
+    (cd "$PROJECT_DIR" && $MAKE_CMD all IMAGE_NUM="$img_num")
     local ret=$?
     find_executable # Refresh after build
     if [ $ret -eq 0 ]; then
@@ -168,7 +170,7 @@ function build() {
 
 function clean() {
     print_status "$GREEN" "Cleaning..."
-    (cd "$PROJECT_DIR" && $MAKE_CMD clean) && print_status "$GREEN" "$STR_SUCCESS" || print_status "$RED" "$STR_FAILED"
+    (cd "$PROJECT_DIR" && $MAKE_CMD clean IMAGE_NUM="$img_num") && print_status "$GREEN" "$STR_SUCCESS" || print_status "$RED" "$STR_FAILED"
 }
 
 function run() {
@@ -178,6 +180,7 @@ function run() {
     find_executable # Refresh path
     
     if [ -f "$EXECUTABLE" ]; then
+        echo -e "   Executing: ${CYAN}$EXECUTABLE${NC} ${YELLOW}$image_file${NC} read-only"
         "$EXECUTABLE" "$image_file" read-only
         local ret=$?
         [ $ret -ne 0 ] && print_status "$RED" "Exited with code: $ret"
@@ -214,6 +217,7 @@ function set_config() {
             read -e -p "$STR_IMG_SELECT: " ni
             if [[ "$ni" =~ ^[0-9]+$ ]] && [ "$ni" -ge 1 ] && [ "$ni" -le "${#img_files[@]}" ]; then
                img_num=$ni
+               load_image_files # Update image_file path variable immediately
                save_config
             fi
             ;;

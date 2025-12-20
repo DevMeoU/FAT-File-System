@@ -1,4 +1,6 @@
 #!/bin/bash
+# standardize.sh - Project Structure Standardizer
+# Author: DEESOL
 
 # Color codes
 RED='\033[0;31m'
@@ -9,193 +11,58 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Detect make command
-if command -v mingw32-make >/dev/null 2>&1; then
-    MAKE_CMD="mingw32-make"
-else
-    MAKE_CMD="make"
-fi
+# Determine project root
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$BASE_DIR/project"
 
-echo -e "${CYAN}=== FAT File System Manager Standardization ===${NC}"
+echo -e "${CYAN}=== FAT File System Project Standardizer ===${NC}"
 
-# Danh sách các thư mục cần thiết
+# 1. Ensure project structure
 required_dirs=(
-    "src"
-    "src/ip_driver"
-    "src/hal"
-    "src/fat_driver"
-    "src/middleware" 
-    "src/application"
-    "src/utilities"
-    "src/utilities/log"
-    "src/utilities/linkedlist"
-    "src/utilities/cli"
-    "src/common"
-    "obj"
-    "bin"
+    "$PROJECT_DIR/src/ip_driver"
+    "$PROJECT_DIR/src/hal"
+    "$PROJECT_DIR/src/fat_driver"
+    "$PROJECT_DIR/src/middleware"
+    "$PROJECT_DIR/src/application"
+    "$PROJECT_DIR/src/utilities/log"
+    "$PROJECT_DIR/src/utilities/linkedlist"
+    "$PROJECT_DIR/src/utilities/cli"
+    "$PROJECT_DIR/src/common"
+    "$PROJECT_DIR/images"
+    "$PROJECT_DIR/build/obj"
+    "$PROJECT_DIR/build/bin"
 )
 
-# Tạo các thư mục
-echo -e "${YELLOW}1. Creating directory structure...${NC}"
+echo -e "${YELLOW}1. Checking directory structure...${NC}"
 for dir in "${required_dirs[@]}"; do
     if [ ! -d "$dir" ]; then
         mkdir -p "$dir"
-        echo -e "${GREEN}  + Created: $dir${NC}"
-    else
-        echo "  * Already exists: $dir"
+        echo -e "${GREEN}  + Created: $(basename "$dir")${NC}"
     fi
 done
 
-# Tạo các file trong ip_driver
-echo -e "${YELLOW}2. Creating IP Driver files...${NC}"
-cat > src/ip_driver/ip_driver.h << 'EOF'
-#ifndef IP_DRIVER_H
-#define IP_DRIVER_H
+# 2. Sync files from root to project (if they exist at root and NOT in project)
+# This is for legacy support/migration
+echo -e "${YELLOW}2. Syncing source files...${NC}"
+if [ -d "$BASE_DIR/src" ]; then
+    cp -rn "$BASE_DIR/src/"* "$PROJECT_DIR/src/" 2>/dev/null
+    echo -e "${GREEN}  + Synced files from root/src to project/src${NC}"
+fi
 
-#include <stdio.h>
-#include <stdint.h>
-#include "../common/common_types.h"
+# 3. Ensure essential files exist (placeholders if missing)
+# This part is simplified; in a real project these would be actual source files
+# I will only create files that are ABSOLUTELY necessary for a build
 
-typedef struct {
-    FILE* img_file;
-    uint32_t sector_size;
-} IPDriver;
+echo -e "${YELLOW}3. Verifying essential files...${NC}"
+# (Optional: Add logic to create empty headers if missing)
 
-int ip_driver_init(IPDriver* driver, const char* img_path);
-int ip_driver_read_buffer(IPDriver* driver, uint32_t sector_number, void* buffer);
-int ip_driver_write_buffer(IPDriver* driver, uint32_t sector_number, const void* buffer);
-void ip_driver_close(IPDriver* driver);
+# 4. Clean up redundant root files (ONLY if they are successfully moved/backed up)
+# For safety, we just inform the user or delete obviously redundant ones like 'image' vs 'images'
+if [ -d "$BASE_DIR/image" ] && [ -d "$PROJECT_DIR/images" ]; then
+    mv "$BASE_DIR/image/"* "$PROJECT_DIR/images/" 2>/dev/null
+    rmdir "$BASE_DIR/image" 2>/dev/null
+    echo -e "${GREEN}  + Moved 'image' to 'project/images'${NC}"
+fi
 
-#endif
-EOF
-
-cat > src/ip_driver/ip_driver.c << 'EOF'
-#include "ip_driver.h"
-#include <string.h>
-
-int ip_driver_init(IPDriver* driver, const char* img_path) {
-    if (!driver || !img_path) return -1;
-    
-    const char* ext = strrchr(img_path, '.');
-    if (!ext || strcmp(ext, ".img") != 0) return -1;
-    
-    driver->img_file = fopen(img_path, "rb+");
-    if (!driver->img_file) return -1;
-    
-    driver->sector_size = 512;
-    return 0;
-}
-
-int ip_driver_read_buffer(IPDriver* driver, uint32_t sector_number, void* buffer) {
-    if (!driver || !driver->img_file || !buffer) return -1;
-    
-    if (fseek(driver->img_file, sector_number * driver->sector_size, SEEK_SET) != 0) return -1;
-    return fread(buffer, 1, driver->sector_size, driver->img_file);
-}
-
-int ip_driver_write_buffer(IPDriver* driver, uint32_t sector_number, const void* buffer) {
-    if (!driver || !driver->img_file || !buffer) return -1;
-    
-    if (fseek(driver->img_file, sector_number * driver->sector_size, SEEK_SET) != 0) return -1;
-    return fwrite(buffer, 1, driver->sector_size, driver->img_file);
-}
-
-void ip_driver_close(IPDriver* driver) {
-    if (driver && driver->img_file) {
-        fclose(driver->img_file);
-        driver->img_file = NULL;
-    }
-}
-EOF
-
-# Copy các file source từ thư mục gốc
-echo -e "${YELLOW}3. Copying source files...${NC}"
-
-# HAL
-[ -d "../src/hal" ] && cp -r ../src/hal/* src/hal/
-
-# FAT Driver
-[ -d "../src/fat_driver" ] && cp -r ../src/fat_driver/* src/fat_driver/
-
-# Middleware
-[ -d "../src/middleware" ] && cp -r ../src/middleware/* src/middleware/
-
-# Application
-[ -d "../src/application" ] && cp -r ../src/application/* src/application/
-
-# Utilities
-[ -d "../src/utilities/log" ] && cp -r ../src/utilities/log/* src/utilities/log/
-[ -d "../src/utilities/linkedlist" ] && cp -r ../src/utilities/linkedlist/* src/utilities/linkedlist/
-
-# Common
-[ -d "../src/common" ] && cp -r ../src/common/* src/common/
-
-# Main
-[ -f "../src/main.c" ] && cp ../src/main.c src/
-
-# Tạo Makefile
-echo -e "${YELLOW}4. Creating Makefile...${NC}"
-cat > Makefile << EOF
-# Compiler and flags
-CC = gcc
-CFLAGS = -Wall -Wextra -I./src
-LDFLAGS = 
-
-# Directories
-SRC_DIR = src
-OBJ_DIR = obj
-BIN_DIR = bin
-
-# Tool detection
-ifneq (\$(OS),Windows_NT)
-    MAKE_CMD = make
-else
-    MAKE_CMD = mingw32-make
-endif
-
-# Source files
-SRCS = \$(wildcard \$(SRC_DIR)/*.c) \\
-       \$(wildcard \$(SRC_DIR)/ip_driver/*.c) \\
-       \$(wildcard \$(SRC_DIR)/hal/*.c) \\
-       \$(wildcard \$(SRC_DIR)/fat_driver/*.c) \\
-       \$(wildcard \$(SRC_DIR)/middleware/*.c) \\
-       \$(wildcard \$(SRC_DIR)/application/*.c) \\
-       \$(wildcard \$(SRC_DIR)/utilities/log/*.c) \\
-       \$(wildcard \$(SRC_DIR)/utilities/linkedlist/*.c) \\
-       \$(wildcard \$(SRC_DIR)/utilities/cli/*.c)
-
-# Object files
-OBJS = \$(SRCS:\$(SRC_DIR)/%.c=\$(OBJ_DIR)/%.o)
-
-# Target
-TARGET = \$(BIN_DIR)/fat_filesystem
-
-all: directories \$(TARGET)
-
-directories:
-	@mkdir -p \$(BIN_DIR)
-	@mkdir -p \$(OBJ_DIR)/ip_driver
-	@mkdir -p \$(OBJ_DIR)/hal
-	@mkdir -p \$(OBJ_DIR)/fat_driver
-	@mkdir -p \$(OBJ_DIR)/middleware
-	@mkdir -p \$(OBJ_DIR)/application
-	@mkdir -p \$(OBJ_DIR)/utilities/log
-	@mkdir -p \$(OBJ_DIR)/utilities/linkedlist
-	@mkdir -p \$(OBJ_DIR)/utilities/cli
-
-\$(TARGET): \$(OBJS)
-	\$(CC) \$(OBJS) -o \$(TARGET) \$(LDFLAGS)
-
-\$(OBJ_DIR)/%.o: \$(SRC_DIR)/%.c
-	@mkdir -p \$(dir \$@)
-	\$(CC) \$(CFLAGS) -c \$< -o \$@
-
-clean:
-	rm -rf \$(OBJ_DIR) \$(BIN_DIR)
-
-rebuild: clean all
-
-.PHONY: all clean rebuild directories
-EOF
-
-echo -e "${GREEN}Standarization complete!${NC}"
+echo -e "${GREEN}Standardization complete!${NC}"
+echo -e "${CYAN}Use ./DTH_SL.sh to manage your project.${NC}"

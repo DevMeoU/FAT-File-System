@@ -44,6 +44,8 @@ static int portable_getch(void) {
                 int vk = ir.Event.KeyEvent.wVirtualKeyCode;
                 if (vk == VK_UP) return KEY_UP;
                 if (vk == VK_DOWN) return KEY_DOWN;
+                if (vk == VK_LEFT) return KEY_LEFT;
+                if (vk == VK_RIGHT) return KEY_RIGHT;
                 continue;
             }
             break;
@@ -71,7 +73,8 @@ static int portable_getch(void) {
             int n3 = getchar();
             if (n3 == 'A') ch = KEY_UP;
             else if (n3 == 'B') ch = KEY_DOWN;
-            /* Add more as needed, e.g. 'C' for Right, 'D' for Left */
+            else if (n3 == 'C') ch = KEY_RIGHT;
+            else if (n3 == 'D') ch = KEY_LEFT;
         } else {
             /* Just a single ESC key or unknown sequence */
             /* Put back n2 if it wasn't EOF? (ungetc doesn't work well with ESC) */
@@ -207,10 +210,11 @@ static void add_to_history(const char* command) {
 }
 
 int cli_get_input(Middleware* middleware, char* buffer, size_t size) {
-    int pos = 0;
+    int pos = 0;        /* Number of characters in buffer */
+    int cursor_pos = 0; /* Current cursor position (0 to pos) */
     int c;
     buffer[0] = '\0';
-    s_history_index = s_history_count; /* Reset index to point past the end */
+    s_history_index = s_history_count;
 
     while (1) {
         c = portable_getch();
@@ -220,61 +224,85 @@ int cli_get_input(Middleware* middleware, char* buffer, size_t size) {
             add_to_history(buffer);
             return 0;
         } else if (c == KEY_BACKSPACE || c == 127) {
-            if (pos > 0) {
+            if (cursor_pos > 0) {
+                /* Shift buffer left */
+                memmove(buffer + cursor_pos - 1, buffer + cursor_pos, pos - cursor_pos + 1);
                 pos--;
-                printf("\b \b");
+                cursor_pos--;
+                
+                /* Visual update: Move back, print tail, clear last char, move back to cursor */
+                printf("\b%s ", buffer + cursor_pos);
+                for (int i = 0; i < pos - cursor_pos + 1; i++) printf("\b");
+            }
+        } else if (c == KEY_LEFT) {
+            if (cursor_pos > 0) {
+                cursor_pos--;
+                printf("\033[D"); /* Move cursor left */
+            }
+        } else if (c == KEY_RIGHT) {
+            if (cursor_pos < pos) {
+                cursor_pos++;
+                printf("\033[C"); /* Move cursor right */
             }
         } else if (c == KEY_TAB) {
             handle_tab_completion(middleware, buffer, &pos, size);
+            cursor_pos = pos; /* Completion always happens at end for now */
         } else if (c == KEY_ESC) {
             buffer[0] = '\0';
             pos = 0;
+            cursor_pos = 0;
             printf("\n");
             middleware_display_prompt(middleware);
         } else if (c == KEY_UP) {
             if (s_history_count > 0 && s_history_index > s_history_count - MAX_HISTORY && s_history_index > 0) {
                 if (s_history_index == s_history_count) {
-                    /* Backup current buffer */
                     strncpy(s_current_buffer_backup, buffer, MAX_BUFFER_SIZE - 1);
                 }
-                
                 s_history_index--;
                 
-                /* Clear current line */
+                /* Clear current line visually */
+                while (cursor_pos < pos) { printf("\033[C"); cursor_pos++; }
                 while (pos > 0) { printf("\b \b"); pos--; }
                 
-                /* Load history */
                 const char* hist = s_history[s_history_index % MAX_HISTORY];
                 strncpy(buffer, hist, size - 1);
                 buffer[size - 1] = '\0';
                 pos = (int)strlen(buffer);
+                cursor_pos = pos;
                 printf("%s", buffer);
             }
         } else if (c == KEY_DOWN) {
             if (s_history_index < s_history_count) {
                 s_history_index++;
                 
-                /* Clear current line */
+                /* Clear current line visually */
+                while (cursor_pos < pos) { printf("\033[C"); cursor_pos++; }
                 while (pos > 0) { printf("\b \b"); pos--; }
                 
                 if (s_history_index == s_history_count) {
-                    /* Restore backup */
                     strncpy(buffer, s_current_buffer_backup, size - 1);
                 } else {
-                    /* Load history */
                     const char* hist = s_history[s_history_index % MAX_HISTORY];
                     strncpy(buffer, hist, size - 1);
                 }
-                
                 buffer[size - 1] = '\0';
                 pos = (int)strlen(buffer);
+                cursor_pos = pos;
                 printf("%s", buffer);
             }
         } else if (c >= 32 && c <= 126) {
             if (pos < (int)size - 1) {
-                buffer[pos++] = (char)c;
-                buffer[pos] = '\0';
-                putchar(c);
+                /* Shift tail right to make space for insertion */
+                memmove(buffer + cursor_pos + 1, buffer + cursor_pos, pos - cursor_pos + 1);
+                buffer[cursor_pos] = (char)c;
+                pos++;
+                
+                /* Visual update: print character and everything after it */
+                printf("%s", buffer + cursor_pos);
+                cursor_pos++;
+                
+                /* Move cursor back to the right position */
+                for (int i = 0; i < pos - cursor_pos; i++) printf("\b");
             }
         }
     }

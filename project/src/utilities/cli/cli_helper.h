@@ -15,6 +15,8 @@
 #define KEY_ESC       27
 #define KEY_UP        1000
 #define KEY_DOWN      1001
+#define KEY_LEFT      1002
+#define KEY_RIGHT     1003
 
 /**
  * Get input from the CLI with tab-completion support
