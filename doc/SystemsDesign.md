@@ -47,10 +47,13 @@ Các tham số này được sử dụng để cấu hình toàn bộ hệ thố
        ├── application
        │     ├── application.h   // Định nghĩa API cho ứng dụng, giao diện người dùng (shell, lệnh,…)
        │     └── application.c   // Hàm main() và giao diện người dùng, xử lý lệnh và chuyển yêu cầu xuống tầng Middleware
-       └── utilities
-             └── linkedlist
-                   ├── linkedlist.h   // API danh sách liên kết hỗ trợ FAT Driver
-                   └── linkedlist.c   // Triển khai danh sách liên kết
+        └── utilities
+              ├── linkedlist
+              │     ├── linkedlist.h   // API danh sách liên kết hỗ trợ FAT Driver
+              │     └── linkedlist.c   // Triển khai danh sách liên kết
+              └── cli
+                    ├── cli_helper.h   // API hỗ trợ CLI (Tab-completion, History, Cursor)
+                    └── cli_helper.c   // Triển khai xử lý nhập liệu chuyên sâu
 </span></code></div></div></pre>
 
 ### 2.2. Luồng truy cập giữa các tầng
