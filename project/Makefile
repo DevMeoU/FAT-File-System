@@ -13,11 +13,11 @@ PROJECT_NAME := application
 ifeq ($(OS),Windows_NT)
     # Windows
     CC := gcc
-    # Other Windows settings...
+    EXE_EXT := .exe
 else
     # Linux/Unix
     CC := gcc
-    # Other Linux settings...
+    EXE_EXT :=
 endif
 
 RM        := rm -rf
@@ -58,7 +58,8 @@ INC_DIRS := $(SRC_DIR) \
             $(SRC_DIR)/middleware \
             $(SRC_DIR)/application \
             $(SRC_DIR)/utilities/linkedlist \
-            $(SRC_DIR)/utilities/log
+            $(SRC_DIR)/utilities/log \
+            $(SRC_DIR)/utilities/cli
 
 # Convert include directories to -I flags
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
@@ -77,7 +78,7 @@ CFLAGS := -Wall -Wextra -Werror \
           $(INC_FLAGS)
 
 # Linker flags
-LDFLAGS := -lm -lpthread -v
+LDFLAGS := -lm -lpthread
 
 # Add debug flags if needed
 ifeq ($(DEBUG), ON)
@@ -92,7 +93,7 @@ endif
 #------------------
 # Target File
 #------------------
-TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
+TARGET := $(BIN_DIR)/$(PROJECT_NAME)$(EXE_EXT)
 
 #------------------
 # Image Files

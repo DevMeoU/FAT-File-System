@@ -412,7 +412,23 @@ const char* middleware_get_current_path(Middleware* middleware) {
 /** Check if in root mode */
 bool middleware_is_root_mode(Middleware* middleware) {
     if (!middleware) return false;
-    
     return middleware->is_root_mode;
+}
+
+void middleware_display_prompt(Middleware* middleware) {
+    if (!middleware) return;
+
+    if (middleware->is_root_mode) {
+        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
+        print_color(COLOR_BOLD, "@");
+        print_color(COLOR_ITALIC COLOR_GREEN, "root: ");
+    } else {
+        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
+        print_color(COLOR_BOLD, "@");
+        print_color(COLOR_ITALIC COLOR_BLUE, "user: ");
+    }
+    print_color(COLOR_MAGENTA, "%s", middleware->current_path);
+    print_color(COLOR_YELLOW, "$> ");
+    fflush(stdout);
 }
 

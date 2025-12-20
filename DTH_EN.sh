@@ -5,10 +5,21 @@
 # Variables and Constants
 #------------------
 # Config & Log files
-CUR_DIR=$(pwd)
+CUR_DIR="$(pwd)"
 PROJECT_DIR="$CUR_DIR/project"
 EXE_DIR="$PROJECT_DIR/build/bin"
-EXECUTABLE=$(find "$EXE_DIR" -type f -name '*.exe' 2>/dev/null | head -1)
+
+# Detect OS and EXE extension
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OS" == "Windows_NT" ]]; then
+    EXE_EXT=".exe"
+else
+    EXE_EXT=""
+fi
+
+function find_executable() {
+    # Match application.exe or application (no ext)
+    EXECUTABLE="$(find "$EXE_DIR" -type f \( -name "application.exe" -o -name "application" \) 2>/dev/null | head -1)"
+}
 
 CONFIG_FILE="shell_config.cfg"
 PID_LOG=".processes.pid"
@@ -227,7 +238,7 @@ function build() {
 function run() {
     echo -e "\n${GREEN}   Running program...${NC}"
     stop_processes "silent"  # Stop old process before running a new one
-
+    find_executable  # Refresh executable path before checking
     if [ -f "$EXECUTABLE" ]; then
         "$EXECUTABLE" "$image_file" read-only  # Run in foreground, don't use `&`
         local app_exit_code=$?  # Get the application's exit code immediately after it finishes

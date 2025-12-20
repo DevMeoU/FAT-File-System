@@ -29,6 +29,7 @@ required_dirs=(
     "src/utilities"
     "src/utilities/log"
     "src/utilities/linkedlist"
+    "src/utilities/cli"
     "src/common"
     "obj"
     "bin"
@@ -160,7 +161,8 @@ SRCS = \$(wildcard \$(SRC_DIR)/*.c) \\
        \$(wildcard \$(SRC_DIR)/middleware/*.c) \\
        \$(wildcard \$(SRC_DIR)/application/*.c) \\
        \$(wildcard \$(SRC_DIR)/utilities/log/*.c) \\
-       \$(wildcard \$(SRC_DIR)/utilities/linkedlist/*.c)
+       \$(wildcard \$(SRC_DIR)/utilities/linkedlist/*.c) \\
+       \$(wildcard \$(SRC_DIR)/utilities/cli/*.c)
 
 # Object files
 OBJS = \$(SRCS:\$(SRC_DIR)/%.c=\$(OBJ_DIR)/%.o)
@@ -179,6 +181,7 @@ directories:
 	@mkdir -p \$(OBJ_DIR)/application
 	@mkdir -p \$(OBJ_DIR)/utilities/log
 	@mkdir -p \$(OBJ_DIR)/utilities/linkedlist
+	@mkdir -p \$(OBJ_DIR)/utilities/cli
 
 \$(TARGET): \$(OBJS)
 	\$(CC) \$(OBJS) -o \$(TARGET) \$(LDFLAGS)

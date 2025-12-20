@@ -6,6 +6,7 @@
  */
 
 #include "application.h"
+#include "cli_helper.h"
 
 /**
  * Initialize the Application structure
@@ -43,25 +44,7 @@ int application_denit(Application* app) {
     return 0;
 }
 
-/**
- * Display the prompt
- * @param app Pointer to the Application structure
- */
-void display_prompt(Application* app) {
-    /* Display the prompt */
-    if (middleware_is_root_mode(app->middleware)) {
-        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
-        print_color(COLOR_BOLD, "@");
-        print_color(COLOR_ITALIC COLOR_GREEN, "root: ");
-    } else {
-        print_color(COLOR_BOLD COLOR_UNDERLINE COLOR_GREEN, "DEESOL");
-        print_color(COLOR_BOLD, "@");
-        print_color(COLOR_ITALIC COLOR_BLUE, "user: ");
-    }
-    print_color(COLOR_MAGENTA, "%s", middleware_get_current_path(app->middleware));
-    print_color(COLOR_YELLOW, "$> ");
-    fflush(stdout);
-}
+
 
 /**
  * Run the application
@@ -74,10 +57,10 @@ int application_run(Application* app) {
 
     while (app->running) {
         /* Display the prompt */
-        display_prompt(app);
+        middleware_display_prompt(app->middleware);
 
         /* Read the command */
-        if (fgets(command, sizeof(command), stdin) == NULL) {
+        if (cli_get_input(app->middleware, command, sizeof(command)) != 0) {
             break;
         }
 
@@ -170,7 +153,7 @@ int process_command_with_and(Application* app, const char *command) {
         cmd = trim(cmd);
         if (*cmd != '\0') {
             /* Process the command here */
-            display_prompt(app);
+            middleware_display_prompt(app->middleware);
             if (application_process_command(app, cmd)) {
                 return -1;
             }
@@ -218,8 +201,13 @@ int application_process_command(Application* app, const char* command) {
     } else if (strcmp(cmd, "evidence") == 0) {
         return middleware_evidence(app->middleware);
     } else if (strcmp(cmd, "cls") == 0 || strcmp(cmd, "clear") == 0) {
-        int ret = system("clear");
-        (void)ret; /* Avoid unused variable warning */
+        int ret;
+#ifdef _WIN32
+        ret = system("cls");
+#else
+        ret = system("clear");
+#endif
+        (void)ret;
         return 0;
     } else if (strcmp(cmd, "help") == 0) {
         application_show_help(app);

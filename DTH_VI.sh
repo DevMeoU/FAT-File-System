@@ -5,10 +5,21 @@
 # Variables and Constants
 #------------------
 # Config & Log files
-CUR_DIR=$(pwd)
+CUR_DIR="$(pwd)"
 PROJECT_DIR="$CUR_DIR/project"
 EXE_DIR="$PROJECT_DIR/build/bin"
-EXECUTABLE=$(find "$EXE_DIR" -type f -name '*.exe' 2>/dev/null | head -1)
+
+# Phát hiện OS và đuôi EXE
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OS" == "Windows_NT" ]]; then
+    EXE_EXT=".exe"
+else
+    EXE_EXT=""
+fi
+
+function find_executable() {
+    # Khớp application.exe hoặc application (không đuôi)
+    EXECUTABLE="$(find "$EXE_DIR" -type f \( -name "application.exe" -o -name "application" \) 2>/dev/null | head -1)"
+}
 
 CONFIG_FILE="shell_config.cfg"
 PID_LOG=".processes.pid"
@@ -228,7 +239,7 @@ function build() {
 function run() {
     echo -e "\n${GREEN}   Khởi chạy chương trình...${NC}"
     stop_processes "silent"  # Dừng tiến trình cũ trước khi chạy mới
-
+    find_executable  # Cập nhật đường dẫn file thực thi trước khi kiểm tra
     if [ -f "$EXECUTABLE" ]; then
         "$EXECUTABLE" "$image_file" read-only  # Chạy foreground, không dùng `&`
         local app_exit_code=$?  # Lấy mã thoát của ứng dụng ngay sau khi kết thúc

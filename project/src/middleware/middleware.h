@@ -98,6 +98,12 @@ const char* middleware_get_current_path(Middleware* middleware);
  */
 bool middleware_is_root_mode(Middleware* middleware);
 
+/**
+ * Display the command prompt
+ * @param middleware Pointer to the Middleware structure
+ */
+void middleware_display_prompt(Middleware* middleware);
+
 #endif /* MIDDLEWARE_H */
 
 

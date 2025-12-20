@@ -11,7 +11,9 @@ build/obj/application/application.o: src/application/application.c \
  src/application/../middleware/../fat_driver/../hal/../ip_driver/ip_driver.h \
  src/application/../middleware/../fat_driver/../hal/../ip_driver/../common/common_types.h \
  src/application/../middleware/../fat_driver/fat_driver_types.h \
- src/application/../middleware/../fat_driver/fat_driver_types.h
+ src/application/../middleware/../fat_driver/fat_driver_types.h \
+ src/utilities/cli/cli_helper.h \
+ src/utilities/cli/../../middleware/middleware.h
 src/application/application.h:
 src/application/../utilities/log/print_color.h:
 src/application/../common/common_types.h:
@@ -25,3 +27,5 @@ src/application/../middleware/../fat_driver/../hal/../ip_driver/ip_driver.h:
 src/application/../middleware/../fat_driver/../hal/../ip_driver/../common/common_types.h:
 src/application/../middleware/../fat_driver/fat_driver_types.h:
 src/application/../middleware/../fat_driver/fat_driver_types.h:
+src/utilities/cli/cli_helper.h:
+src/utilities/cli/../../middleware/middleware.h:

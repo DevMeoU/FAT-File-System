@@ -28,6 +28,7 @@ required_dirs=(
     "project/src/application"
     "project/src/utilities/log"
     "project/src/utilities/linkedlist"
+    "project/src/utilities/cli"
     "project/src/common"
     "project/images"
     "project/build/obj"

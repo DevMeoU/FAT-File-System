@@ -104,13 +104,33 @@ EOF
 }
 
 function load_image_files() {
-    img_files=($(ls ${PROJECT_DIR}/images/*.img 2>/dev/null))
+    img_files=($(ls "$IMAGE_DIR"/*.img 2>/dev/null))
     if [ ${#img_files[@]} -eq 0 ]; then
         image_file=""
         return
     fi
     [ "$img_num" -lt 1 ] || [ "$img_num" -gt "${#img_files[@]}" ] && img_num=1
     image_file="${img_files[$((img_num - 1))]}"
+}
+
+function show_info() {
+    find_executable
+    echo -e "${GREEN}   Shell Configuration${NC}"
+    echo
+    echo -e "   Working directory:          ${CYAN}$(pwd)${NC}"
+    echo -e "   Project directory:          ${CYAN}$PROJECT_DIR${NC}"
+    echo -e "   Executable directory:       ${CYAN}$EXE_DIR${NC}"
+    echo -e "   Executable file:            ${YELLOW}$EXECUTABLE${NC}"
+    echo -e "   Auto Build:                 ${ORANGE}$auto_build${NC}"
+    echo -e "   Auto Run:                   ${ORANGE}$auto_run${NC}"
+    echo -e "   Auto Clean:                 ${ORANGE}$auto_clean${NC}"
+    echo -e "   Image Number:               ${INDIGO}$img_num${NC}"
+    echo
+}
+
+function find_executable() {
+    # Match application.exe or application
+    EXECUTABLE=$(find "$EXE_DIR" -type f \( -name "application.exe" -o -name "application" \) 2>/dev/null | head -1)
 }
 
 function show_logo() {
@@ -136,7 +156,14 @@ function show_menu() {
 
 function build() {
     print_status "$GREEN" "$STR_BUILDING"
-    (cd "$PROJECT_DIR" && $MAKE_CMD all) && print_status "$GREEN" "$STR_SUCCESS" || print_status "$RED" "$STR_FAILED"
+    (cd "$PROJECT_DIR" && $MAKE_CMD all)
+    local ret=$?
+    find_executable # Refresh after build
+    if [ $ret -eq 0 ]; then
+        print_status "$GREEN" "$STR_SUCCESS"
+    else
+        print_status "$RED" "$STR_FAILED"
+    fi
 }
 
 function clean() {
@@ -148,8 +175,7 @@ function run() {
     print_status "$GREEN" "$STR_RUNNING"
     stop_processes "silent"
     
-    # Refresh executable path
-    EXECUTABLE=$(find "$EXE_DIR" -type f -name "application$EXE_EXT" 2>/dev/null | head -1)
+    find_executable # Refresh path
     
     if [ -f "$EXECUTABLE" ]; then
         "$EXECUTABLE" "$image_file" read-only
@@ -205,6 +231,7 @@ function main() {
     load_config
     while true; do
         show_logo
+        show_info
         show_menu
         read -e -p "$STR_INPUT" choice
         case $choice in
