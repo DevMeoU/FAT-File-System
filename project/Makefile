@@ -1,30 +1,30 @@
-# Makefile cho FAT File System Project
+# Makefile for FAT File System Project
 # Author: Ducson9112k
 
 #------------------
-# Tên project
+# Project Name
 #------------------
 PROJECT_NAME := application
 
 #------------------
-# Công cụ build
+# Build Tools
 #------------------
-# Phát hiện hệ điều hành
+# Detect Operating System
 ifeq ($(OS),Windows_NT)
     # Windows
-    CC := C:/cygwin64/bin/gcc.exe
-    # Các cài đặt Windows khác...
+    CC := gcc
+    # Other Windows settings...
 else
     # Linux/Unix
     CC := gcc
-    # Các cài đặt Linux khác...
+    # Other Linux settings...
 endif
 
 RM        := rm -rf
 MKDIR     := mkdir -p
 
 #------------------
-# Thư mục
+# Directories
 #------------------
 ROOT_DIR  := .
 SRC_DIR   := $(ROOT_DIR)/src
@@ -33,20 +33,21 @@ OBJ_DIR   := $(BUILD_DIR)/obj
 BIN_DIR   := $(BUILD_DIR)/bin
 DEP_DIR   := $(BUILD_DIR)/dep
 IMAGE_DIR := $(ROOT_DIR)/images
+
 #------------------
-# Các file nguồn
+# Source Files
 #------------------
-# Tìm tất cả các file .c trong thư mục src và thư mục con
+# Find all .c files in src and subdirectories
 SRCS := $(shell find $(SRC_DIR) -type f -name "*.c")
 
-# Tạo danh sách file object tương ứng
+# Create object file list
 OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-# Tạo danh sách file dependency
+# Create dependency file list
 DEPS := $(SRCS:$(SRC_DIR)/%.c=$(DEP_DIR)/%.d)
 
 #------------------
-# Cờ biên dịch
+# Compiler Flags
 #------------------
 # Include paths
 INC_DIRS := $(SRC_DIR) \
@@ -78,73 +79,73 @@ CFLAGS := -Wall -Wextra -Werror \
 # Linker flags
 LDFLAGS := -lm -lpthread -v
 
-# Thêm cờ debug nếu cần
+# Add debug flags if needed
 ifeq ($(DEBUG), ON)
 CFLAGS += -g -DDEBUG
 endif
 
-# Thêm cờ verbose nếu cần
+# Add verbose flags if needed
 ifeq ($(VERBOSE), ON)
 CFLAGS += -v
 endif
 
 #------------------
-# File đích
+# Target File
 #------------------
 TARGET := $(BIN_DIR)/$(PROJECT_NAME).exe
 
 #------------------
-# File ảnh
+# Image Files
 #------------------
 IMAGE_FILES := $(wildcard $(subst \\,/,$(IMAGE_DIR))/*.img)
 
-# Đánh số để truy cập image
+# Number to access image
 IMAGE_NUM ?= 1
 
-# Chọn file ảnh theo IMAGE_NUM tự động (hỗ trợ nhiều file)
+# Select image file automatically (supports multiple files)
 FILE_IMAGE := $(word $(IMAGE_NUM), $(IMAGE_FILES))
 
 $(info Using image file: $(FILE_IMAGE))
 
 #------------------
-# Chế độ
+# Modes
 #------------------
-# Chế độ mặc định
+# Default modes
 BUILD_MODE ?= release
 MODE ?= read-only
 
 #------------------
-# Các target
+# Targets
 #------------------
 .PHONY: all clean run debug release help
 
-# Target mặc định
+# Default target
 all: release
 
-# Build bản release (có tối ưu)
+# Build release version (optimized)
 release: CFLAGS += -O2 -DNDEBUG
 release: $(TARGET)
-	@echo "Build release hoàn thành"
+	@echo "Build release completed"
 
-# Build bản debug
+# Build debug version
 debug: CFLAGS += -g -DDEBUG
 debug: $(TARGET)
-	@echo "Build debug hoàn thành"
+	@echo "Build debug completed"
 
-# Build file thực thi
+# Build executable
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	@echo "Linking $@..."
 	@$(CC) $(OBJS) $(LDFLAGS) -o $@
-	@echo "Build hoàn thành!"
+	@echo "Build completed!"
 
-# Compile các file nguồn
+# Compile source files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	@echo "Compiling $<..."
 	@$(MKDIR) $(dir $@)
 	@$(MKDIR) $(dir $(DEP_DIR)/$*.d)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# Tạo các thư mục cần thiết
+# Create necessary directories
 $(BIN_DIR) $(OBJ_DIR):
 	@$(MKDIR) $@
 
@@ -152,7 +153,7 @@ $(BIN_DIR) $(OBJ_DIR):
 clean:
 	@echo "Cleaning..."
 	@$(RM) $(BUILD_DIR)
-	@echo "Clean hoàn thành!"
+	@echo "Clean completed!"
 
 # Run
 run: $(TARGET)
@@ -165,14 +166,14 @@ print-%:
 
 # Help
 help:
-	@echo "Các target có sẵn:"
-	@echo "  all      - Build tất cả (mặc định)"
-	@echo "  release  - Build bản release"
-	@echo "  debug    - Build bản debug"
-	@echo "  clean    - Xóa các file build"
-	@echo "  run      - Chạy chương trình"
-	@echo "  help     - Hiển thị help này"
-	@echo "  print-%  - In giá trị của biến"
+	@echo "Available targets:"
+	@echo "  all      - Build all (default)"
+	@echo "  release  - Build release version"
+	@echo "  debug    - Build debug version"
+	@echo "  clean    - Remove build files"
+	@echo "  run      - Run the program"
+	@echo "  help     - Display this help"
+	@echo "  print-%  - Print variable value"
 
 # Include dependency files
 -include $(DEPS)

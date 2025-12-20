@@ -1,32 +1,47 @@
 #!/bin/bash
 
-# Danh sách các thư mục cần thiết
+# Color codes
+RED='\033[0;31m'
+ORANGE='\033[0;33m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Detect make command
+if command -v mingw32-make >/dev/null 2>&1; then
+    MAKE_CMD="mingw32-make"
+else
+    MAKE_CMD="make"
+fi
+
+echo -e "${CYAN}=== Creating FAT File System project structure ===${NC}"
+
+# Directory list
 required_dirs=(
     "project"
-    "project/src"
     "project/src/ip_driver"
     "project/src/hal"
     "project/src/fat_driver"
     "project/src/middleware"
     "project/src/application"
-    "project/src/utilities"
     "project/src/utilities/log"
     "project/src/utilities/linkedlist"
     "project/src/common"
-    "project/obj"
-    "project/bin"
+    "project/images"
+    "project/build/obj"
+    "project/build/bin"
 )
 
-echo "=== Tạo cấu trúc dự án FAT File System Manager ==="
-
-# Tạo các thư mục
-echo "1. Tạo cấu trúc thư mục..."
+# Step 1: Create directory structure
+echo -e "${YELLOW}1. Creating directories...${NC}"
 for dir in "${required_dirs[@]}"; do
     if [ ! -d "$dir" ]; then
-        echo "  + Tạo: $dir"
         mkdir -p "$dir"
+        echo -e "${GREEN}  + Created: $dir${NC}"
     else
-        echo "  * Đã tồn tại: $dir"
+        echo "  * Already exists: $dir"
     fi
 done
 
@@ -46,8 +61,8 @@ typedef struct {
 } IPDriver;
 
 int ip_driver_init(IPDriver* driver, const char* img_path);
-int ip_driver_read_sector(IPDriver* driver, uint32_t sector_number, void* buffer);
-int ip_driver_write_sector(IPDriver* driver, uint32_t sector_number, const void* buffer);
+int ip_driver_read_buffer(IPDriver* driver, uint32_t sector_number, void* buffer);
+int ip_driver_write_buffer(IPDriver* driver, uint32_t sector_number, const void* buffer);
 void ip_driver_close(IPDriver* driver);
 
 #endif
@@ -71,14 +86,14 @@ int ip_driver_init(IPDriver* driver, const char* img_path) {
     return 0;
 }
 
-int ip_driver_read_sector(IPDriver* driver, uint32_t sector_number, void* buffer) {
+int ip_driver_read_buffer(IPDriver* driver, uint32_t sector_number, void* buffer) {
     if (!driver || !driver->img_file || !buffer) return -1;
     
     fseek(driver->img_file, sector_number * driver->sector_size, SEEK_SET);
     return fread(buffer, 1, driver->sector_size, driver->img_file);
 }
 
-int ip_driver_write_sector(IPDriver* driver, uint32_t sector_number, const void* buffer) {
+int ip_driver_write_buffer(IPDriver* driver, uint32_t sector_number, const void* buffer) {
     if (!driver || !driver->img_file || !buffer) return -1;
     
     fseek(driver->img_file, sector_number * driver->sector_size, SEEK_SET);
@@ -229,15 +244,17 @@ chmod +x standardize.sh
 # 2. Chạy script để tạo cấu trúc project
 ./standardize.sh
 
-# 3. Build project
-make clean     # Xóa các file build cũ
-make all       # Build toàn bộ project
-make rebuild   # Rebuild toàn bộ project
+# Step 3: Build project
+echo -e "${YELLOW}3. Building project...${NC}"
+(cd project && $MAKE_CMD clean && $MAKE_CMD all)
 
-# 4. Kiểm tra kết quả build
-ls -l bin/fat_filesystem
+# Step 4: Verify build
+EXECUTABLE=$(find "project/build/bin" -type f -name 'application*' 2>/dev/null | head -1)
+if [ -f "$EXECUTABLE" ]; then
+    echo -e "${GREEN}Build successful: $EXECUTABLE${NC}"
+    chmod -R 755 project/src
+    echo -e "${CYAN}To run the project, use: ./DTH_SL.sh${NC}"
+else
+    echo -e "${RED}Build failed: Executable not found.${NC}"
+fi
 
-# Cấp quyền thực thi cho các file trong thư mục src
-chmod -R 755 src/
-
-./bin/fat_filesystem <đường_dẫn_tới_file_img>

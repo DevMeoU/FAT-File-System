@@ -8,30 +8,21 @@
 #include "fat_driver_private.h"
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <strings.h>
 
 /* Local functions */
-static int fat_driver_load_fat_table(FATDriver* driver);
 static int fat_driver_load_root_directory(FATDriver* driver);
-static int fat_driver_build_directory_tree(FATDriver* driver);
 static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_sector_buffer);
+static FileNode* fat_driver_find_in_directory(FATDriver* driver, FileNode* dir, const char* name);
 
 /**
  * Initialize the FATDriver with the given configuration.
- * 
- * This function initializes the hardware abstraction layer (HAL) and sets up
- * the FATDriver structure with the specified file system configuration. It also
- * allocates memory for the cache based on the provided configuration.
- * 
- * @param driver Pointer to the FATDriver structure to initialize.
- * @param config The file system configuration containing parameters such as 
- *               image path and cache size.
- * @return 0 if the initialization is successful, -1 if there is any failure 
- *         during the process.
  */
 int fat_driver_init(FATDriver* driver, const FileSystemConfig config) {
     /* Allocate memory for HAL */
     HAL* hal = malloc(sizeof(HAL));
-    if (hal_init(hal, config.img_path, SECTOR_SIZE_512) != 0) {
+    if (hal_init(hal, config.img_path, config.sector_size) != 0) {
         return -1;
     }
     if (!driver || !hal) return -1;
@@ -46,39 +37,32 @@ int fat_driver_init(FATDriver* driver, const FileSystemConfig config) {
     driver->cache = malloc(driver->cache_size * hal_get_sector_size(hal));
     if (!driver->cache) return -1;
     
-    return 0;
-}
-/**
- * Deinitializes the FATDriver and releases all the allocated resources.
- * 
- * This function is the counterpart of fat_driver_init() and should be called
- * when the FATDriver is no longer needed. It releases all the allocated resources
- * and deinitializes the hardware abstraction layer (HAL).
- * 
- * @param driver Pointer to the FATDriver structure to deinitialize.
- * @return 0 if the deinitialization is successful, -1 if there is any failure 
- *         during the process.
- */
-int fat_driver_deinit(FATDriver* driver) {
-    if (!driver || !driver->hal) return -1;
-    
-    hal_deinit(driver->hal);
+    /* Allocate memory for FAT cache (1 sector) */
+    driver->fat_cache = malloc(hal_get_sector_size(hal));
+    if (!driver->fat_cache) {
+        free(driver->cache);
+        return -1;
+    }
+    driver->fat_cache_sector = 0xFFFFFFFF; /* Invalid sector to start */
     
     return 0;
 }
 
 /**
- * Mounts the FAT file system and sets up the FATDriver for operations.
- * 
- * This function mounts the FAT file system and sets up the FATDriver for 
- * operations. It reads the boot sector, parses it to extract the necessary 
- * configuration parameters, calculates the sector numbers of the FAT, root 
- * directory and data area, loads the FAT table, loads the root directory and 
- * builds the directory tree.
- * 
- * @param driver Pointer to the FATDriver structure to mount.
- * @return 0 if the mount is successful, -1 if there is any failure during the 
- *         process.
+ * Deinitializes the FATDriver.
+ */
+int fat_driver_deinit(FATDriver* driver) {
+    if (!driver || !driver->hal) return -1;
+    
+    hal_deinit(driver->hal);
+    free(driver->hal);
+    driver->hal = NULL;
+    
+    return 0;
+}
+
+/**
+ * Mounts the FAT file system.
  */
 int fat_driver_mount(FATDriver* driver) {
     if (!driver || !driver->hal) return -1;
@@ -86,33 +70,39 @@ int fat_driver_mount(FATDriver* driver) {
     uint8_t* boot_sector_buffer = malloc(hal_get_sector_size(driver->hal));
     if (!boot_sector_buffer) return -1;
     
-    /* Đọc boot sector */
+    /* Read boot sector */
     uint32_t bytes_read = hal_read_sector(driver->hal, 0, boot_sector_buffer);
     if (bytes_read != (uint32_t)hal_get_sector_size(driver->hal)) {
         free(boot_sector_buffer);
         return -1;
     }
     
-    /* Phân tích boot sector */
+    /* Parse boot sector */
     fat_driver_parse_boot_sector(driver, boot_sector_buffer);
     free(boot_sector_buffer);
     
-    /* Tính toán các thông số cần thiết */
+    /* Validate critical parameters to avoid division by zero and invalid memory access */
+    if (driver->boot_sector.bytes_per_sector == 0 || 
+        driver->boot_sector.sectors_per_cluster == 0) {
+        return -1;
+    }
+    
+    /* Calculate necessary parameters */
     driver->first_fat_sector = driver->boot_sector.reserved_sectors;
     
-    /* Tính số sector của thư mục gốc (chỉ áp dụng cho FAT12/16) */
+    /* Calculate root dir sectors (FAT12/16) */
     driver->root_dir_sectors = ((driver->boot_sector.root_entry_count * 32) + 
                                (driver->boot_sector.bytes_per_sector - 1)) / 
                                driver->boot_sector.bytes_per_sector;
     
-    /* Tính sector đầu tiên của thư mục gốc */
+    /* Calculate first root dir sector */
     driver->first_root_dir_sector = driver->boot_sector.reserved_sectors + 
                                    (driver->boot_sector.number_of_fats * 
                                    (driver->boot_sector.fat_size_16 ? 
                                     driver->boot_sector.fat_size_16 : 
                                     driver->boot_sector.fat_size_32));
     
-    /* Tính sector đầu tiên của vùng dữ liệu */
+    /* Calculate first data sector */
     if (fat_driver_get_fat_type(driver) == FAT_TYPE_32) {
         driver->first_data_sector = driver->boot_sector.reserved_sectors + 
                                    (driver->boot_sector.number_of_fats * 
@@ -122,62 +112,50 @@ int fat_driver_mount(FATDriver* driver) {
                                    driver->root_dir_sectors;
     }
     
-    /* Tính tổng số sector dữ liệu */
+    /* Calculate total data sectors */
     uint32_t total_sectors = driver->boot_sector.total_sectors_16 ? 
                             driver->boot_sector.total_sectors_16 : 
                             driver->boot_sector.total_sectors_32;
     
-    driver->data_sectors = total_sectors - 
-                          (driver->boot_sector.reserved_sectors + 
-                          (driver->boot_sector.number_of_fats * 
-                          (driver->boot_sector.fat_size_16 ? 
-                           driver->boot_sector.fat_size_16 : 
-                           driver->boot_sector.fat_size_32)) + 
-                          driver->root_dir_sectors);
-    
-    /* Tính tổng số cluster */
-    driver->total_clusters = driver->data_sectors / 
-                            driver->boot_sector.sectors_per_cluster;
-    
-    /* Load bảng FAT */
-    if (fat_driver_load_fat_table(driver) != 0) {
-        return -1;
+    uint32_t metadata_sectors = (driver->boot_sector.reserved_sectors + 
+                                (driver->boot_sector.number_of_fats * 
+                                (driver->boot_sector.fat_size_16 ? 
+                                 driver->boot_sector.fat_size_16 : 
+                                 driver->boot_sector.fat_size_32)) + 
+                                driver->root_dir_sectors);
+
+    if (total_sectors < metadata_sectors) {
+        return -1; /* Invalid file system size */
     }
     
-    /* Load thư mục gốc */
+    driver->data_sectors = total_sectors - metadata_sectors;
+    
+    /* Calculate total clusters */
+    driver->total_clusters = driver->data_sectors / 
+                            driver->boot_sector.sectors_per_cluster;
+
+    
+    /* Initialize root directory (node only) */
     if (fat_driver_load_root_directory(driver) != 0) {
         return -1;
     }
     
-    /* Xây dựng cây thư mục */
-    if (fat_driver_build_directory_tree(driver) != 0) {
-        return -1;
-    }
-    
-    /* Đặt thư mục hiện tại là thư mục gốc */
+    /* Set current directory to root */
     driver->current_directory = driver->root_directory;
     
     return 0;
 }
 
 /**
- * Unmounts the FAT file system and releases all the allocated resources.
- * 
- * This function is the counterpart of fat_driver_mount() and should be called
- * when the FATDriver is no longer needed. It releases all the allocated resources
- * and deinitializes the FATDriver.
- * 
- * @param driver Pointer to the FATDriver structure to unmount.
- * @return 0 if the unmount is successful, -1 if there is any failure during the 
- *         process.
+ * Unmounts the FAT file system.
  */
 void fat_driver_unmount(FATDriver* driver) {
     if (!driver) return;
     
-    /* Giải phóng bộ nhớ */
-    if (driver->fat_table) {
-        free(driver->fat_table);
-        driver->fat_table = NULL;
+    /* Free memory */
+    if (driver->fat_cache) {
+        free(driver->fat_cache);
+        driver->fat_cache = NULL;
     }
     
     if (driver->cache) {
@@ -185,7 +163,7 @@ void fat_driver_unmount(FATDriver* driver) {
         driver->cache = NULL;
     }
     
-    /* Giải phóng cây thư mục */
+    /* Free root directory node */
     if (driver->root_directory) {
         fat_driver_free_file_node(driver->root_directory);
         driver->root_directory = NULL;
@@ -193,164 +171,106 @@ void fat_driver_unmount(FATDriver* driver) {
     
     driver->current_directory = NULL;
 }
-/**
- * Gets the root directory of the FAT file system.
- * 
- * This function returns a pointer to the root directory of the FAT file system.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @return Pointer to the root directory if successful, NULL if failed.
- */
+
 FileNode* fat_driver_get_root_directory(FATDriver* driver) {
     if (!driver) return NULL;
-    
     return driver->root_directory;
 }
 
-/**
- * Gets the current directory of the FAT file system.
- * 
- * This function returns a pointer to the current directory of the FAT file system.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @return Pointer to the current directory if successful, NULL if failed.
- */
 FileNode* fat_driver_get_current_directory(FATDriver* driver) {
     if (!driver) return NULL;
-    
     return driver->current_directory;
 }
 
-/**
- * Sets the current directory of the FAT file system.
- * 
- * This function sets the current directory of the FAT file system to the given
- * directory. It returns 0 if successful or -1 if failed.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param directory Pointer to the directory to set as the current directory.
- * @return 0 if successful, -1 if failed.
- */
 int fat_driver_set_current_directory(FATDriver* driver, FileNode* directory) {
     if (!driver || !directory || directory->type != FILE_TYPE_DIRECTORY) {
         return -1;
     }
-    
     driver->current_directory = directory;
     return 0;
 }
 
 /**
- * Finds a path in the FAT file system.
- * 
- * This function takes a path and returns a pointer to the FileNode if successful
- * or NULL if failed.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param path Path to find.
- * @return Pointer to the FileNode if successful, NULL if failed.
+ * Finds a path in the FAT file system (On-Demand).
  */
 FileNode* fat_driver_find_path(FATDriver* driver, const char* path) {
     if (!driver || !path) return NULL;
     
+    FileNode* current = driver->current_directory;
+    
     /* Handle absolute path */
     if (path[0] == '/') {
-        if (path[1] == '\0') {
-            return driver->root_directory;
-        }
-        
-        /* Skip the leading '/' character */
-        path++;
-        FileNode* current = driver->root_directory;
-        return fat_driver_find_path_recursive(current, path);
+        current = driver->root_directory;
+        while (path[0] == '/') path++; /* Skip slashes */
+        if (path[0] == '\0') return current;
     }
     
-    /* Handle relative path */
-    FileNode* current = driver->current_directory;
-    return fat_driver_find_path_recursive(current, path);
-}
-
-/**
- * Recursive function to find a path.
- * 
- * This function takes a path and returns a pointer to the FileNode if successful
- * or NULL if failed.
- * 
- * @param current Current directory.
- * @param path Path to find.
- * @return Pointer to the FileNode if successful, NULL if failed.
- */
-FileNode* fat_driver_find_path_recursive(FileNode* current, const char* path) {
-    if (!current || !path || path[0] == '\0') {
-        return current;
-    }
-
-    /**
-     * Separate the first component of the path.
-     */
     char component[FILE_NAME_MAX + 1];
-    const char* next_path = NULL;
-
-    const char* slash = strchr(path, '/');
-    if (slash) {
-        size_t len = slash - path;
+    
+    while (path[0] != '\0') {
+        /* Extract next component */
+        const char* next_slash = strchr(path, '/');
+        size_t len = next_slash ? (size_t)(next_slash - path) : strlen(path);
+        
         if (len > FILE_NAME_MAX) len = FILE_NAME_MAX;
         strncpy(component, path, len);
         component[len] = '\0';
-        next_path = slash + 1;
-    } else {
-        strncpy(component, path, FILE_NAME_MAX);
-        component[FILE_NAME_MAX] = '\0';
-        next_path = path + strlen(path);
-    }
-
-    /**
-     * Handle special cases.
-     */
-    if (strcmp(component, ".") == 0) {
-        return fat_driver_find_path_recursive(current, next_path);
-    } else if (strcmp(component, "..") == 0) {
-        if (current->parent) {
-            return fat_driver_find_path_recursive(current->parent, next_path);
-        } else {
-            return fat_driver_find_path_recursive(current, next_path);
-        }
-    }
-
-    /**
-     * Search in the children list.
-     */
-    FileNode* child = current->children;
-    while (child) {
-        if (strcmp(child->name, component) == 0) {
-            if (*next_path == '\0') {
-                return child;
-            } else if (child->type == FILE_TYPE_DIRECTORY) {
-                return fat_driver_find_path_recursive(child, next_path);
-            } else {
-                return NULL; /* Cannot navigate into a file */
+        
+        /* Advance path pointer */
+        path += len;
+        if (path[0] == '/') path++;
+        
+        /* Special cases */
+        if (strcmp(component, ".") == 0) {
+            continue;
+        } else if (strcmp(component, "..") == 0) {
+            // Since we don't have a tree with parent pointers effective for on-demand without keeping history,
+            // this is tricky. If we are traversing down, we lose parent context unless we keep a stack or the node has it.
+            // But we are creating nodes on the fly. 
+            // For now, if we are at root, stay at root. 
+            // NOTE: Implementing ".." correctly in on-demand requiring tracking or re-opening parent.
+            // The existing `FileNode` has `parent` pointer. We can set it when we find a child.
+            // But if we just loaded `current`, `current->parent` might be NULL if we didn't set it (e.g. root).
+            if (current->parent) {
+                current = current->parent;
             }
+            continue;
         }
-        child = child->next;
+        
+        /* Find component in current directory */
+        FileNode* next_node = fat_driver_find_in_directory(driver, current, component);
+        if (!next_node) {
+            return NULL; /* Not found */
+        }
+        
+        /* Setup parent pointer for the new node so ".." works */
+        next_node->parent = current;
+        
+        /* If there is more path, next_node must be a directory */
+        if (path[0] != '\0' && next_node->type != FILE_TYPE_DIRECTORY) {
+            fat_driver_free_file_node(next_node);
+            return NULL;
+        }
+        
+        /* Move to next */
+        // CAUTION: If we are just traversing, we might leak memory if we don't attach `next_node` to something or free it later.
+        // The original code built a tree. Here we are returning a node.
+        // If we want to return a node that is part of a tree, we should attach it to `current->children`?
+        // Let's attach it to cache it.
+        
+        // Check if it's already in children to avoid duplicates?
+        // simplified: Just return the new node. The caller manages it (or we leak if we don't track).
+        // To be safe and mimic previous behavior: attach to current->children.
+        
+        next_node->next = current->children;
+        current->children = next_node;
+        
+        current = next_node;
     }
-
-    return NULL; /* Not found */
+    
+    return current;
 }
 
-/**
- * Reads a file from the file system.
- * 
- * This function reads a file from the file system and stores its content in the
- * provided buffer. The size of the buffer must be at least as large as the size
- * of the file. If the file is larger than the buffer, the function will return
- * an error.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param file Pointer to the FileNode structure of the file to read.
- * @param buffer Buffer to store the file content.
- * @param size Size of the buffer.
- * @return The number of bytes read if successful, -1 if failed.
- */
 int fat_driver_read_file(FATDriver* driver, FileNode* file, void* buffer, uint32_t size) {
     if (!driver || !file || !buffer || file->type != FILE_TYPE_REGULAR) {
         return -1;
@@ -394,7 +314,6 @@ int fat_driver_read_file(FATDriver* driver, FileNode* file, void* buffer, uint32
                 bytes_read += bytes_to_copy;
             }
             
-            /** Get the next cluster */
             current_cluster = fat_driver_get_next_cluster(driver, current_cluster);
         }
         
@@ -405,44 +324,15 @@ int fat_driver_read_file(FATDriver* driver, FileNode* file, void* buffer, uint32
     return -1;
 }
 
-/**
- * Writes a file to the file system.
- * 
- * This function writes a file to the file system from the provided buffer. The
- * size of the buffer must be at least as large as the size of the file. If the
- * file is larger than the buffer, the function will return an error.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param file Pointer to the FileNode structure of the file to write.
- * @param buffer Buffer containing the file content.
- * @param size Size of the buffer.
- * @return The number of bytes written if successful, -1 if failed.
- */
 int fat_driver_write_file(FATDriver* driver, FileNode* file, const void* buffer, uint32_t size) {
-    if (!driver || !file || !buffer || file->type != FILE_TYPE_REGULAR) {
-        return -1;
-    }
-    
-    /** Check mode */
-    if (driver->config.mode == MODE_READ_WRITE) {
-        /** Implement writing a file */
-        // ...
-        
-        return size;
-    }
-    
+    /* Not implemented */
+    (void)driver;
+    (void)file;
+    (void)buffer;
+    (void)size;
     return -1;
 }
 
-/**
- * Gets the FAT type of the file system.
- * 
- * This function determines the FAT type of the file system based on the number
- * of clusters.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @return The FAT type of the file system.
- */
 FatType fat_driver_get_fat_type(FATDriver* driver) {
     if (!driver) return FAT_TYPE_UNKNOWN;
     
@@ -457,16 +347,6 @@ FatType fat_driver_get_fat_type(FATDriver* driver) {
     }
 }
 
-/**
- * Gets the file system information.
- * 
- * This function gets the total size and free size of the file system.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param total_size Pointer to a uint64_t to store the total size of the file system.
- * @param free_size Pointer to a uint64_t to store the free size of the file system.
- * @return 0 if successful, -1 if failed.
- */
 int fat_driver_get_filesystem_info(FATDriver* driver, uint64_t* total_size, uint64_t* free_size) {
     if (!driver || !total_size || !free_size) return -1;
     
@@ -475,9 +355,6 @@ int fat_driver_get_filesystem_info(FATDriver* driver, uint64_t* total_size, uint
     
     *total_size = (uint64_t)driver->total_clusters * cluster_size;
     
-    /**
-     * Counts the number of free clusters.
-     */
     uint32_t free_clusters = 0;
     for (uint32_t i = 2; i < driver->total_clusters + 2; i++) {
         if (fat_driver_get_fat_entry(driver, i) == 0) {
@@ -490,16 +367,6 @@ int fat_driver_get_filesystem_info(FATDriver* driver, uint64_t* total_size, uint
     return 0;
 }
 
-/**
- * Converts a cluster number to a sector number.
- * 
- * This function converts a cluster number to a sector number based on the 
- * configuration of the FAT file system.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param cluster Cluster number to convert.
- * @return The sector number corresponding to the given cluster number.
- */
 uint32_t fat_driver_cluster_to_sector(FATDriver* driver, uint32_t cluster) {
     if (!driver || cluster < 2) return 0;
     
@@ -507,35 +374,23 @@ uint32_t fat_driver_cluster_to_sector(FATDriver* driver, uint32_t cluster) {
           (cluster - 2) * driver->boot_sector.sectors_per_cluster;
 }
 
-/**
- * Frees a FileNode structure and all its children.
- * 
- * This function frees a FileNode structure and all its children.
- * 
- * @param node Pointer to the FileNode structure to free.
- */
 void fat_driver_free_file_node(FileNode* node) {
     if (!node) return;
     
-    /** Frees the children first */
     FileNode* child = node->children;
     while (child) {
         FileNode* next = child->next;
         fat_driver_free_file_node(child);
         child = next;
     }
-    
-    /** Free the current node */
     free(node);
 }
 
-/** Internal function to parse the boot sector */
 static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_sector_buffer) {
     if (!driver || !boot_sector_buffer) return;
     
     BootSector* bs = &driver->boot_sector;
     
-    /* Copy fields from boot sector */
     bs->bytes_per_sector = *(uint16_t*)(boot_sector_buffer + 11);
     bs->sectors_per_cluster = *(uint8_t*)(boot_sector_buffer + 13);
     bs->reserved_sectors = *(uint16_t*)(boot_sector_buffer + 14);
@@ -549,7 +404,6 @@ static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_
     bs->hidden_sectors = *(uint32_t*)(boot_sector_buffer + 28);
     bs->total_sectors_32 = *(uint32_t*)(boot_sector_buffer + 32);
     
-    /* Check if it is FAT32 */
     if (bs->fat_size_16 == 0) {
         bs->fat_size_32 = *(uint32_t*)(boot_sector_buffer + 36);
         bs->extended_flags = *(uint16_t*)(boot_sector_buffer + 40);
@@ -557,354 +411,79 @@ static void fat_driver_parse_boot_sector(FATDriver* driver, const uint8_t* boot_
         bs->root_cluster = *(uint32_t*)(boot_sector_buffer + 44);
         bs->fs_info = *(uint16_t*)(boot_sector_buffer + 48);
         bs->backup_boot_sector = *(uint16_t*)(boot_sector_buffer + 50);
-        /* Copy 12 reserved bytes */
         memcpy(bs->reserved, boot_sector_buffer + 52, 12);
     }
     
-    /* Copy common fields */
     bs->drive_number = *(uint8_t*)(boot_sector_buffer + (bs->fat_size_16 == 0 ? 64 : 36));
     bs->reserved1 = *(uint8_t*)(boot_sector_buffer + (bs->fat_size_16 == 0 ? 65 : 37));
     bs->boot_signature = *(uint8_t*)(boot_sector_buffer + (bs->fat_size_16 == 0 ? 66 : 38));
     bs->volume_id = *(uint32_t*)(boot_sector_buffer + (bs->fat_size_16 == 0 ? 67 : 39));
     
-    /* Copy volume label (11 bytes) */
     memcpy(bs->volume_label, boot_sector_buffer + (bs->fat_size_16 == 0 ? 71 : 43), 11);
-    /* bs->volume_label[11] = '\0'; */
-    
-    /* Copy file system type (8 bytes) */
     memcpy(bs->fs_type, boot_sector_buffer + (bs->fat_size_16 == 0 ? 82 : 54), 8);
-    /* bs->fs_type[8] = '\0'; */
 }
 
-/**
- * Internal function to load the FAT table.
- */
-static int fat_driver_load_fat_table(FATDriver* driver) {
-    if (!driver) return -1;
-    
-    uint32_t fat_size;
-    if (driver->boot_sector.fat_size_16 != 0) {
-        fat_size = driver->boot_sector.fat_size_16;
-    } else {
-        fat_size = driver->boot_sector.fat_size_32;
-    }
-    
-    uint32_t fat_size_bytes = fat_size * driver->boot_sector.bytes_per_sector;
-    driver->fat_table = malloc(fat_size_bytes);
-    if (!driver->fat_table) return -1;
-    
-    uint32_t sector_size = hal_get_sector_size(driver->hal);
-    uint8_t* buffer = malloc(sector_size);
-    if (!buffer) {
-        free(driver->fat_table);
-        driver->fat_table = NULL;
-        return -1;
-    }
-    
-    for (uint32_t i = 0; i < fat_size; i++) {
-        uint32_t read_bytes = hal_read_sector(driver->hal, driver->first_fat_sector + i, buffer);
-        if (read_bytes != sector_size) {
-            free(buffer);
-            free(driver->fat_table);
-            driver->fat_table = NULL;
-            return -1;
-        }
-        
-        memcpy((uint8_t*)driver->fat_table + i * sector_size, buffer, sector_size);
-    }
-    
-    free(buffer);
-    return 0;
-}
-
-/**
- * Internal function to load the root directory.
- */
 static int fat_driver_load_root_directory(FATDriver* driver) {
     if (!driver) return -1;
     
-    /* Create node for the root directory */
     driver->root_directory = malloc(sizeof(FileNode));
     if (!driver->root_directory) return -1;
     
     memset(driver->root_directory, 0, sizeof(FileNode));
     strcpy(driver->root_directory->name, "/");
     driver->root_directory->type = FILE_TYPE_DIRECTORY;
-    driver->root_directory->attributes.directory = true; /* FAT_ATTR_DIRECTORY; */
+    driver->root_directory->attributes.directory = true;
     
     if (fat_driver_get_fat_type(driver) == FAT_TYPE_32) {
         driver->root_directory->first_cluster = driver->boot_sector.root_cluster;
     } else {
-        driver->root_directory->first_cluster = 0; /* Root directory in FAT12/16 is not in the data area */
+        driver->root_directory->first_cluster = 0;
     }
     
     return 0;
 }
 
-/**
- * Internal function to build the directory tree.
- */
-static int fat_driver_build_directory_tree(FATDriver* driver) {
-    if (!driver || !driver->root_directory) return -1;
-    
-    uint32_t sector_size = hal_get_sector_size(driver->hal);
-    uint8_t* buffer = malloc(sector_size);
-    if (!buffer) return -1;
-    
-    /**
-     * Process the root directory
-     */
-    if (fat_driver_get_fat_type(driver) == FAT_TYPE_32) {
-        /* In FAT32, the root directory is a cluster chain */
-        uint32_t current_cluster = driver->root_directory->first_cluster;
-        
-        while (current_cluster != 0 && 
-               current_cluster != FAT32_EOC) {
-            
-            uint32_t first_sector_of_cluster = fat_driver_cluster_to_sector(driver, current_cluster);
-            
-            for (uint32_t i = 0; i < driver->boot_sector.sectors_per_cluster; i++) {
-                uint32_t read_bytes = hal_read_sector(driver->hal, first_sector_of_cluster + i, buffer);
-                if (read_bytes != sector_size) {
-                    free(buffer);
-                    return -1;
-                }
-                
-                /* Process the entries in the sector */
-                for (uint32_t j = 0; j < sector_size; j += 32) {
-                    FATDirEntry* entry = (FATDirEntry*)(buffer + j);
-                    
-                    /* Check for empty or deleted entries */
-                    if (entry->name[0] == 0x00 || entry->name[0] == (uint8_t)0xE5) {
-                        continue;
-                    }
-                    
-                    /* Skip volume label entries */
-                    if (entry->attributes & FAT_ATTR_VOLUME_ID) {
-                        continue;
-                    }
-                    
-                    /* Create a new node */
-                    FileNode* node = malloc(sizeof(FileNode));
-                    if (!node) {
-                        free(buffer);
-                        return -1;
-                    }
-                    
-                    /* Fill in the node */
-                    fat_driver_fill_file_node(driver, node, entry);
-                    
-                    /* Add the node to the root directory */
-                    node->parent = driver->root_directory;
-                    node->next = driver->root_directory->children;
-                    driver->root_directory->children = node;
-                }
-            }
-            
-            /* Get the next cluster */
-            current_cluster = fat_driver_get_next_cluster(driver, current_cluster);
-        }
-    } else {
-        /* In FAT12/16, the root directory is at a fixed location */
-        for (uint32_t i = 0; i < driver->root_dir_sectors; i++) {
-            uint32_t read_bytes = hal_read_sector(driver->hal, driver->first_root_dir_sector + i, buffer);
-            if (read_bytes != sector_size) {
-                free(buffer);
-                return -1;
-            }
-            
-            /* Process the entries in the sector */
-            for (uint32_t j = 0; j < sector_size; j += 32) {
-                FATDirEntry* entry = (FATDirEntry*)(buffer + j);
-                
-                /* Check for empty or deleted entries */
-                if (entry->name[0] == 0x00 || entry->name[0] == (uint8_t)0xE5) {
-                    continue;
-                }
-                
-                /* Skip volume label entries */
-                if (entry->attributes & FAT_ATTR_VOLUME_ID) {
-                    continue;
-                }
-                
-                /* Create a new node */
-                FileNode* node = malloc(sizeof(FileNode));
-                if (!node) {
-                    free(buffer);
-                    return -1;
-                }
-                
-                /* Fill in the node */
-                fat_driver_fill_file_node(driver, node, entry);
-                
-                /* Add the node to the root directory */
-                node->parent = driver->root_directory;
-                node->next = driver->root_directory->children;
-                driver->root_directory->children = node;
-            }
-        }
-    }
-    
-    /* Process the subdirectories */
-    FileNode* current = driver->root_directory->children;
-    while (current) {
-        if (current->type == FILE_TYPE_DIRECTORY) {
-            fat_driver_build_directory_tree_recursive(driver, current);
-        }
-        current = current->next;
-    }
-    
-    free(buffer);
-    return 0;
-}
-
-/* Recursive function to build the directory tree */
-int fat_driver_build_directory_tree_recursive(FATDriver* driver, FileNode* directory) {
-    if (!driver || !directory || directory->type != FILE_TYPE_DIRECTORY) {
-        return -1;
-    }
-    
-    uint32_t sector_size = hal_get_sector_size(driver->hal);
-    uint8_t* buffer = malloc(sector_size);
-    if (!buffer) return -1;
-    
-    uint32_t current_cluster = directory->first_cluster;
-    
-    while (current_cluster != 0 && 
-           current_cluster != FAT12_EOC && 
-           current_cluster != FAT16_EOC && 
-           current_cluster != FAT32_EOC) {
-        
-        uint32_t first_sector_of_cluster = fat_driver_cluster_to_sector(driver, current_cluster);
-        
-        for (uint32_t i = 0; i < driver->boot_sector.sectors_per_cluster; i++) {
-            uint32_t read_bytes = hal_read_sector(driver->hal, first_sector_of_cluster + i, buffer);
-            if (read_bytes != sector_size) {
-                free(buffer);
-                return -1;
-            }
-            
-            /* Process the entries in the sector */
-            for (uint32_t j = 0; j < sector_size; j += 32) {
-                FATDirEntry* entry = (FATDirEntry*)(buffer + j);
-                
-                /* Check for empty or deleted entries */
-                if (entry->name[0] == 0x00 || entry->name[0] == (uint8_t)0xE5) {
-                    continue;
-                }
-                
-                /* Skip volume label entries and . and .. entries */
-                if ((entry->attributes & FAT_ATTR_VOLUME_ID) ||
-                    (entry->name[0] == '.' && entry->name[1] == ' ') ||
-                    (entry->name[0] == '.' && entry->name[1] == '.' && entry->name[2] == ' ')) {
-                    continue;
-                }
-                
-                /* Create a new node */
-                FileNode* node = malloc(sizeof(FileNode));
-                if (!node) {
-                    free(buffer);
-                    return -1;
-                }
-                
-                /* Fill in the node */
-                fat_driver_fill_file_node(driver, node, entry);
-                
-                /* Add the node to the current directory */
-                node->parent = directory;
-                node->next = directory->children;
-                directory->children = node;
-            }
-        }
-        
-        /* Get the next cluster */
-        current_cluster = fat_driver_get_next_cluster(driver, current_cluster);
-    }
-    
-    /* Process the subdirectories */
-    FileNode* current = directory->children;
-    while (current) {
-        if (current->type == FILE_TYPE_DIRECTORY) {
-            fat_driver_build_directory_tree_recursive(driver, current);
-        }
-        current = current->next;
-    }
-    
-    free(buffer);
-    return 0;
-}
-
-/**
- * Fills in the node from the entry.
- */
 void fat_driver_fill_file_node(FATDriver* driver, FileNode* node, const FATDirEntry* entry) {
     if (!driver || !node || !entry) return;
     
     memset(node, 0, sizeof(FileNode));
     
-    /**
-     * Convert the file name from the 8.3 format.
-     */
+    /* NOTE: Name handling is now done by LFN parser in find structure, 
+       but for 8.3 fallback we still keep this logic optionally, or expect caller to set name. 
+       This function will populate 8.3 name if node->name is empty? 
+       Actually, let's keep it doing 8.3, and caller overwrites with LFN if present. */
+    
     char name[13] = {0};
     int name_len = 0;
     
-    /**
-     * Process the name part (8 characters).
-     */
     for (int i = 0; i < 8; i++) {
-        if (entry->name[i] != ' ') {
-            name[name_len++] = entry->name[i];
-        }
+        if (entry->name[i] != ' ') name[name_len++] = entry->name[i];
     }
     
-    /**
-     * Process the extension part (3 characters).
-     */
     if (entry->ext[0] != ' ') {
         name[name_len++] = '.';
         for (int i = 0; i < 3; i++) {
-            if (entry->ext[i] != ' ') {
-                name[name_len++] = entry->ext[i];
-            }
+            if (entry->ext[i] != ' ') name[name_len++] = entry->ext[i];
         }
     }
     
     name[name_len] = '\0';
     
-    /**
-     * Convert the name to lowercase.
-     */
     for (int i = 0; i < name_len; i++) {
-        if (name[i] >= 'A' && name[i] <= 'Z') {
-            name[i] = name[i] - 'A' + 'a';
-        }
+        name[i] = tolower((unsigned char)name[i]);
     }
     
     strcpy(node->name, name);
     
-    /**
-     * Fill in other information.
-     */
     node->size = entry->file_size;
-    node->attributes.directory = true; /* FAT_ATTR_DIRECTORY; */
+    node->attributes.directory = (entry->attributes & FAT_ATTR_DIRECTORY) != 0;
+    node->type = (entry->attributes & FAT_ATTR_DIRECTORY) ? FILE_TYPE_DIRECTORY : FILE_TYPE_REGULAR;
     
-    if (entry->attributes & FAT_ATTR_DIRECTORY) {
-        node->type = FILE_TYPE_DIRECTORY;
-    } else {
-        node->type = FILE_TYPE_REGULAR;
-    }
-    
-    /**
-     * Calculate the first cluster.
-     */
     node->first_cluster = entry->first_cluster_low;
     if (fat_driver_get_fat_type(driver) == FAT_TYPE_32) {
         node->first_cluster |= ((uint32_t)entry->first_cluster_high << 16);
     }
     
-    /**
-     * Fill in the time information.
-     */
     node->created_time.year = 1980 + ((entry->create_date >> 9) & 0x7F);
     node->created_time.month = (entry->create_date >> 5) & 0x0F;
     node->created_time.day = entry->create_date & 0x1F;
@@ -920,43 +499,328 @@ void fat_driver_fill_file_node(FATDriver* driver, FileNode* node, const FATDirEn
     node->modified_time.second = (entry->write_time & 0x1F) * 2;
 }
 
-/* Function to get the value of an entry in the FAT table */
 uint32_t fat_driver_get_fat_entry(FATDriver* driver, uint32_t cluster) {
-    if (!driver || !driver->fat_table) return 0;
+    if (!driver || !driver->fat_cache) return 0;
     
     FatType fat_type = fat_driver_get_fat_type(driver);
+    uint32_t fat_offset = 0;
+    uint32_t sector_num = 0;
+    uint32_t offset_in_sector = 0;
+    uint32_t sector_size = hal_get_sector_size(driver->hal);
     
     if (fat_type == FAT_TYPE_12) {
-        uint32_t fat_offset = cluster + (cluster / 2);
-        uint16_t fat_entry = *(uint16_t*)((uint8_t*)driver->fat_table + fat_offset);
+        fat_offset = cluster + (cluster / 2);
+    } else if (fat_type == FAT_TYPE_16) {
+        fat_offset = cluster * 2;
+    } else if (fat_type == FAT_TYPE_32) {
+        fat_offset = cluster * 4;
+    }
+    
+    sector_num = driver->first_fat_sector + (fat_offset / sector_size);
+    offset_in_sector = fat_offset % sector_size;
+    
+    if (driver->fat_cache_sector != sector_num) {
+        if ((uint32_t)hal_read_sector(driver->hal, sector_num, driver->fat_cache) != sector_size) {
+            return 0;
+        }
+        driver->fat_cache_sector = sector_num;
+    }
+    
+    uint8_t* cache = driver->fat_cache;
+    
+    if (fat_type == FAT_TYPE_12) {
+        uint16_t fat_entry;
+        
+        if (offset_in_sector == sector_size - 1) {
+            uint8_t byte1 = cache[offset_in_sector];
+            sector_num++;
+            
+            if (driver->fat_cache_sector != sector_num) {
+                if ((uint32_t)hal_read_sector(driver->hal, sector_num, driver->fat_cache) != sector_size) {
+                    return 0;
+                }
+                driver->fat_cache_sector = sector_num;
+            }
+            uint8_t byte2 = driver->fat_cache[0];
+            fat_entry = byte1 | ((uint16_t)byte2 << 8);
+        } else {
+            fat_entry = *(uint16_t*)(cache + offset_in_sector);
+        }
         
         if (cluster & 0x1) {
-            /* Odd cluster */
             return fat_entry >> 4;
         } else {
-            /* Even cluster */
             return fat_entry & 0x0FFF;
         }
     } else if (fat_type == FAT_TYPE_16) {
-        uint32_t fat_offset = cluster * 2;
-        return *(uint16_t*)((uint8_t*)driver->fat_table + fat_offset);
+        return *(uint16_t*)(cache + offset_in_sector);
     } else if (fat_type == FAT_TYPE_32) {
-        uint32_t fat_offset = cluster * 4;
-        return *(uint32_t*)((uint8_t*)driver->fat_table + fat_offset) & 0x0FFFFFFF;
+        return *(uint32_t*)(cache + offset_in_sector) & 0x0FFFFFFF;
     }
     
     return 0;
 }
 
-/**
- * Gets the next cluster in the cluster chain.
- * 
- * @param driver Pointer to the FATDriver structure.
- * @param cluster The current cluster.
- * @return The next cluster in the chain.
- */
 uint32_t fat_driver_get_next_cluster(FATDriver* driver, uint32_t cluster) {
     if (!driver) return 0;
-    
     return fat_driver_get_fat_entry(driver, cluster);
+}
+
+/**
+ * Check if a cluster value indicates End-of-Chain.
+ */
+int fat_driver_is_eoc(FATDriver* driver, uint32_t cluster) {
+    if (!driver) return 1; /* Treat invalid as EOC */
+    
+    FatType fat_type = fat_driver_get_fat_type(driver);
+    
+    if (fat_type == FAT_TYPE_12) {
+        return cluster >= 0x0FF8;
+    } else if (fat_type == FAT_TYPE_16) {
+        return cluster >= 0xFFF8;
+    } else if (fat_type == FAT_TYPE_32) {
+        return cluster >= 0x0FFFFFF8;
+    }
+    
+    return 1;
+}
+
+/**
+ * List all entries in a directory (populates dir->children).
+ * Call this before iterating dir->children.
+ */
+int fat_driver_list_directory(FATDriver* driver, FileNode* dir) {
+    if (!driver || !dir || dir->type != FILE_TYPE_DIRECTORY) return -1;
+    
+    /* Free existing children to avoid duplicates */
+    FileNode* child = dir->children;
+    while (child) {
+        FileNode* next = child->next;
+        fat_driver_free_file_node(child);
+        child = next;
+    }
+    dir->children = NULL;
+    
+    uint32_t sector_size = hal_get_sector_size(driver->hal);
+    uint8_t* buffer = malloc(sector_size);
+    if (!buffer) return -1;
+    
+    uint32_t current_cluster = dir->first_cluster;
+    
+    /* LFN buffer */
+    char lfn_buffer[256] = {0};
+    int has_lfn = 0;
+    
+    /* Handling ROOT_DIR for FAT12/16 (sectors, not clusters) */
+    int is_root_16 = (dir == driver->root_directory && fat_driver_get_fat_type(driver) != FAT_TYPE_32);
+    uint32_t root_sectors_count = is_root_16 ? driver->root_dir_sectors : 0;
+    uint32_t root_current_sector_idx = 0;
+    
+    while (1) {
+        /* Condition loop: cluster based or fixed sector based */
+        if (is_root_16) {
+            if (root_current_sector_idx >= root_sectors_count) break;
+        } else {
+            if (current_cluster == 0 || fat_driver_is_eoc(driver, current_cluster)) break;
+        }
+        
+        uint32_t first_sector = 0;
+        uint32_t sector_count = 0;
+        
+        if (is_root_16) {
+            first_sector = driver->first_root_dir_sector + root_current_sector_idx;
+            sector_count = 1;
+            root_current_sector_idx++;
+        } else {
+            first_sector = fat_driver_cluster_to_sector(driver, current_cluster);
+            sector_count = driver->boot_sector.sectors_per_cluster;
+        }
+        
+        for (uint32_t s = 0; s < sector_count; s++) {
+            int read_result = hal_read_sector(driver->hal, first_sector + s, buffer);
+            if (read_result < 0 || (uint32_t)read_result != sector_size) {
+                free(buffer);
+                return -1;
+            }
+            
+            for (uint32_t off = 0; off < sector_size; off += 32) {
+                FATDirEntry* entry = (FATDirEntry*)(buffer + off);
+                
+                if (entry->name[0] == 0x00) { /* End of dir */
+                    free(buffer);
+                    return 0;
+                }
+                if (entry->name[0] == 0xE5) { /* Deleted */
+                    has_lfn = 0;
+                    continue;
+                }
+                
+                if (entry->attributes == FAT_ATTR_LFN) {
+                    LFNEntry* lfn = (LFNEntry*)entry;
+                    if (lfn->order & 0x40) { /* Last LFN entry (first in sequence) */
+                        memset(lfn_buffer, 0, sizeof(lfn_buffer));
+                        has_lfn = 1;
+                    }
+                    
+                    if (has_lfn) {
+                        int index = ((lfn->order & 0x3F) - 1) * 13;
+                        if (index >= 0 && index < 255) {
+                            int p = 0;
+                            for(int i=0; i<5; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name1[i];
+                            for(int i=0; i<6; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name2[i];
+                            for(int i=0; i<2; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name3[i];
+                        }
+                    }
+                    continue;
+                }
+                
+                /* Skip . and .. entries */
+                if ((entry->name[0] == '.' && entry->name[1] == ' ') ||
+                    (entry->name[0] == '.' && entry->name[1] == '.' && entry->name[2] == ' ')) {
+                    has_lfn = 0;
+                    continue;
+                }
+                
+                /* Regular entry */
+                FileNode* node = malloc(sizeof(FileNode));
+                if (!node) {
+                    free(buffer);
+                    return -1;
+                }
+                fat_driver_fill_file_node(driver, node, entry);
+                
+                /* Apply LFN if present */
+                if (has_lfn) {
+                    strncpy(node->name, lfn_buffer, FILE_NAME_MAX);
+                    node->name[FILE_NAME_MAX] = '\0';
+                    has_lfn = 0;
+                }
+                
+                /* Add to children list */
+                node->parent = dir;
+                node->next = dir->children;
+                dir->children = node;
+            }
+        }
+        
+        if (!is_root_16) {
+            current_cluster = fat_driver_get_next_cluster(driver, current_cluster);
+        }
+    }
+    
+    free(buffer);
+    return 0;
+}
+
+/**
+ * Helper to find a file in a specific directory node by scanning its sectors.
+ * Supports LFN.
+ */
+static FileNode* fat_driver_find_in_directory(FATDriver* driver, FileNode* dir, const char* name) {
+    if (!driver || !dir || !name) return NULL;
+    
+    uint32_t sector_size = hal_get_sector_size(driver->hal);
+    uint8_t* buffer = malloc(sector_size);
+    if (!buffer) return NULL;
+    
+    uint32_t current_cluster = dir->first_cluster;
+    
+    // LFN buffer
+    char lfn_buffer[256] = {0};
+    int has_lfn = 0;
+    
+    // Handling ROOT_DIR for FAT12/16 (sectors, not clusters)
+    int is_root_16 = (dir == driver->root_directory && fat_driver_get_fat_type(driver) != FAT_TYPE_32);
+    uint32_t root_sectors_count = is_root_16 ? driver->root_dir_sectors : 0;
+    uint32_t root_current_sector_idx = 0;
+    
+    while (1) {
+        // Condition loop: cluster based or fixed sector based
+        if (is_root_16) {
+            if (root_current_sector_idx >= root_sectors_count) break;
+        } else {
+            if (current_cluster == 0 || current_cluster >= 0x0FFFFFF8) break; // End of chain
+        }
+        
+        uint32_t first_sector = 0;
+        uint32_t sector_count = 0;
+        
+        if (is_root_16) {
+            first_sector = driver->first_root_dir_sector + root_current_sector_idx;
+            sector_count = 1; // Read 1 sector at a time in loop
+            root_current_sector_idx++;
+        } else {
+            first_sector = fat_driver_cluster_to_sector(driver, current_cluster);
+            sector_count = driver->boot_sector.sectors_per_cluster;
+        }
+        
+        for (uint32_t s = 0; s < sector_count; s++) {
+            int read_result = hal_read_sector(driver->hal, first_sector + s, buffer);
+            if (read_result < 0 || (uint32_t)read_result != sector_size) {
+                free(buffer);
+                return NULL;
+            }
+            
+            for (uint32_t off = 0; off < sector_size; off += 32) {
+                FATDirEntry* entry = (FATDirEntry*)(buffer + off);
+                
+                if (entry->name[0] == 0x00) { // End of dir
+                    free(buffer);
+                    return NULL;
+                }
+                if (entry->name[0] == 0xE5) { // Deleted
+                    has_lfn = 0;
+                    continue;
+                }
+                
+                if (entry->attributes == FAT_ATTR_LFN) {
+                    LFNEntry* lfn = (LFNEntry*)entry;
+                    if (lfn->order & 0x40) { // Last LFN entry (first in sequence)
+                        memset(lfn_buffer, 0, sizeof(lfn_buffer));
+                        has_lfn = 1;
+                        /* TODO: Implement checksum verification if needed */
+                    }
+                    
+                    if (has_lfn) {
+                        int index = ((lfn->order & 0x3F) - 1) * 13;
+                        if (index >= 0 && index < 255) {
+                            // Extract unicode chars, simple cast to char for now
+                            int p = 0;
+                            for(int i=0; i<5; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name1[i];
+                            for(int i=0; i<6; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name2[i];
+                            for(int i=0; i<2; i++) if (index+p < 255) lfn_buffer[index + p++] = (char)lfn->name3[i];
+                        }
+                    }
+                    continue;
+                }
+                
+                // Regular entry
+                FileNode* node = malloc(sizeof(FileNode));
+                fat_driver_fill_file_node(driver, node, entry);
+                
+                // Check LFN match
+                if (has_lfn) {
+                    // TODO: verify checksum
+                     strcpy(node->name, lfn_buffer);
+                     has_lfn = 0; // Reset
+                }
+                
+                // Compare name
+                if (strcasecmp(node->name, name) == 0) {
+                    free(buffer);
+                    return node;
+                }
+                
+                free(node);
+                has_lfn = 0;
+            }
+        }
+        
+        if (!is_root_16) {
+            current_cluster = fat_driver_get_next_cluster(driver, current_cluster);
+        }
+    }
+    
+    free(buffer);
+    return NULL;
 }

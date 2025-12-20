@@ -122,6 +122,22 @@ int fat_driver_get_filesystem_info(FATDriver* driver, uint64_t* total_size, uint
 uint32_t fat_driver_cluster_to_sector(FATDriver* driver, uint32_t cluster);
 
 /**
+ * Check if cluster is End-of-Chain
+ * @param driver Pointer to FATDriver structure
+ * @param cluster Cluster number to check
+ * @return 1 if EOC, 0 otherwise
+ */
+int fat_driver_is_eoc(FATDriver* driver, uint32_t cluster);
+
+/**
+ * List all entries in a directory (populates dir->children)
+ * @param driver Pointer to FATDriver structure
+ * @param dir Pointer to directory node
+ * @return 0 if successful, -1 if failed
+ */
+int fat_driver_list_directory(FATDriver* driver, FileNode* dir);
+
+/**
  * Free file node
  * @param node Pointer to the node to free
  */

@@ -12,7 +12,9 @@
  * @author Le Duc Son
  */
 
+#ifndef PATH_MAX
 #define PATH_MAX 256 /**< Maximum path length */
+#endif
 
 typedef struct {
     const char* img_path;
@@ -40,9 +42,10 @@ int middleware_denit(Middleware* middleware);
 /**
  * Process ls command (list directory contents)
  * @param middleware Pointer to the Middleware structure
+ * @param path Optional path to list (NULL for current directory)
  * @return 0 if successful, -1 if failed
  */
-int middleware_ls(Middleware* middleware);
+int middleware_ls(Middleware* middleware, const char* path);
 
 /**
  * Process cd command (change directory)

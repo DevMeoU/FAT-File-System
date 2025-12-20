@@ -77,16 +77,42 @@ int middleware_denit(Middleware* middleware) {
         fat_driver_unmount(middleware->fat_driver);
         fat_driver_deinit(middleware->fat_driver);
         free(middleware->fat_driver);
+        middleware->fat_driver = NULL;
     }
     
     return 0;
 }
 
 /** List directory contents */
-int middleware_ls(Middleware* middleware) {
-    if (!middleware || !middleware->current_directory) return -1;
+int middleware_ls(Middleware* middleware, const char* path) {
+    if (!middleware || !middleware->fat_driver) return -1;
     
-    FileNode* current = middleware->current_directory->children;
+    FileNode* target_dir = middleware->current_directory;
+    
+    /* If path is provided, find the target directory */
+    if (path != NULL && strlen(path) > 0) {
+        target_dir = fat_driver_find_path(middleware->fat_driver, path);
+        if (!target_dir) {
+            print_error("ls: %s: No such file or directory\n", path);
+            return -1;
+        }
+        if (target_dir->type != FILE_TYPE_DIRECTORY) {
+            /* If it's a file, we could just list it, but usually ls [path] on a file lists the file itself.
+               For simplicity let's require a directory or handle file listing. */
+            printf("%-32s %-12s %-12u\n", target_dir->name, "File", target_dir->size);
+            return 0;
+        }
+    }
+    
+    if (!target_dir) return -1;
+    
+    /* Populate directory children before listing */
+    if (fat_driver_list_directory(middleware->fat_driver, target_dir) != 0) {
+        print_error("Failed to read directory contents\n");
+        return -1;
+    }
+    
+    FileNode* current = target_dir->children;
     
     if (!current) {
         printf("Directory is empty\n");
@@ -113,37 +139,25 @@ int middleware_ls(Middleware* middleware) {
         char modified[32] = {0};
         
         if (current->created_time.year > 0) {
-            sprintf(created, "%04d-%02d-%02d %02d:%02d:%02d", 
-                    current->created_time.year, 
-                    current->created_time.month, 
-                    current->created_time.day,
-                    current->created_time.hour,
-                    current->created_time.minute,
-                    current->created_time.second);
+            snprintf(created, sizeof(created), "%04d-%02d-%02d %02d:%02d",
+                    current->created_time.year, current->created_time.month, current->created_time.day,
+                    current->created_time.hour, current->created_time.minute);
         } else {
             strcpy(created, "N/A");
         }
         
         if (current->modified_time.year > 0) {
-            sprintf(modified, "%04d-%02d-%02d %02d:%02d:%02d", 
-                    current->modified_time.year, 
-                    current->modified_time.month, 
-                    current->modified_time.day,
-                    current->modified_time.hour,
-                    current->modified_time.minute,
-                    current->modified_time.second);
+            snprintf(modified, sizeof(modified), "%04d-%02d-%02d %02d:%02d",
+                    current->modified_time.year, current->modified_time.month, current->modified_time.day,
+                    current->modified_time.hour, current->modified_time.minute);
         } else {
             strcpy(modified, "N/A");
         }
         
-        /** Print color for directories */
-        print_color(current->type == FILE_TYPE_DIRECTORY ? COLOR_CYAN : COLOR_WHITE, "%-32s ", current->name);
-        printf("%-12s %-12u %-20s %-20s\n",
-               type_str, 
-               current->size, 
-               created, 
-               modified);
-        
+        /** Print directory/file name and info safely */
+        printf("%-32s %-12s %-12u %-20s %-20s\n", 
+               current->name, type_str, current->size, created, modified);
+               
         current = current->next;
     }
     

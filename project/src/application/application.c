@@ -99,7 +99,7 @@ int application_run(Application* app) {
 
     }
 
-    middleware_denit(app->middleware);
+    /* middleware_denit is called in main */
 
     return 0;
 }
@@ -199,7 +199,8 @@ int application_process_command(Application* app, const char* command) {
 
     /* Handle the commands */
     if (strcmp(cmd, "ls") == 0) {
-        return middleware_ls(app->middleware);
+        char* path = strtok(NULL, " ");
+        return middleware_ls(app->middleware, path);
     } else if (strcmp(cmd, "cd") == 0) {
         char* path = strtok(NULL, " ");
         if (!path) {
@@ -241,13 +242,13 @@ void application_show_help(Application* app) {
     (void)app; /* Avoid unused parameter warning */
 
     printf("Available commands:\n");
-    printf("  ls                  List files and directories\n");
-    printf("  cd <path>           Change directory\n");
-    printf("  cat <file>          Display file content\n");
-    printf("  evidence            Show file system information\n");
-    printf("  cls, clear          Clear the screen\n");
-    printf("  help                Show this help message\n");
-    printf("  exit, quit          Exit the program\n");
+    printf("  ls [path]                 List files and directories\n");
+    printf("  cd <path>                 Change directory\n");
+    printf("  cat <file>                Display file content\n");
+    printf("  evidence                  Show file system information\n");
+    printf("  cls, clear                Clear the screen\n");
+    printf("  help                      Show this help message\n");
+    printf("  exit, quit                Exit the program\n");
 }
 
 /**
@@ -315,5 +316,5 @@ int main(int argc, char* argv[]) {
     application_denit(&app);
 
     /* Return error code if application_run failed */
-    return result == 0 ? 42 : 1;
+    return result == 0 ? 0 : 1;
 }

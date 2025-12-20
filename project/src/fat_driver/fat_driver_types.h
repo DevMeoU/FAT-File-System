@@ -50,7 +50,7 @@ typedef struct {
 /**
  * Directory Entry structure
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     char name[8];                   /**< Name (8 characters) */
     char extension[3];              /**< Extension (3 characters) */
     uint8_t attributes;             /**< Attributes */
@@ -69,7 +69,7 @@ typedef struct {
 /**
  * LFN (Long File Name) Entry structure
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t order;                  /**< Order of entry */
     uint16_t name1[5];              /**< First 5 characters (Unicode) */
     uint8_t attribute;              /**< Attribute (always 0x0F for LFN) */
@@ -104,7 +104,9 @@ typedef struct {
     HAL* hal;                       /**< Pointer to HAL */
     FileSystemConfig config;        /**< File system configuration */
     BootSector boot_sector;         /**< Boot sector */
-    uint32_t* fat_table;            /**< FAT table */
+    uint8_t* fat_cache;             /**< FAT table sector cache */
+    uint32_t fat_cache_sector;      /**< Current sector loaded in FAT cache */
+                                    /**< Note: Valid only if fat_cache != NULL */
     uint32_t first_fat_sector;      /**< First sector of FAT */
     uint32_t first_data_sector;     /**< First sector of data area */
     uint32_t root_dir_sectors;      /**< Number of sectors of root directory (FAT12/16) */

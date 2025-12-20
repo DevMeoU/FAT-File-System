@@ -59,7 +59,7 @@ int hal_deinit(HAL* hal) {
 int hal_read_sector(HAL* hal, uint32_t sector_number, void* buffer) {
     if (!hal || !buffer) return -1;
     
-    return ip_driver_read_sector(&hal->ip_driver, sector_number, buffer);
+    return ip_driver_read_buffer(&hal->ip_driver, sector_number, buffer);
 }
 
 /**
@@ -72,7 +72,7 @@ int hal_read_sector(HAL* hal, uint32_t sector_number, void* buffer) {
 int hal_write_sector(HAL* hal, uint32_t sector_number, const void* buffer) {
     if (!hal || !buffer) return -1;
     
-    return ip_driver_write_sector(&hal->ip_driver, sector_number, buffer);
+    return ip_driver_write_buffer(&hal->ip_driver, sector_number, buffer);
 }
 
 /**

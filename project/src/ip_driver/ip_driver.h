@@ -36,7 +36,7 @@ int ip_driver_init(IPDriver* driver, const char* img_path);
  * @param buffer Buffer to store read data
  * @return Number of bytes read if success, -1 if failed
  */
-int ip_driver_read_sector(IPDriver* driver, uint32_t offset, void* buffer);
+int ip_driver_read_buffer(IPDriver* driver, uint32_t offset, void* buffer);
 
 /**
  * Write a sector to image file
@@ -45,7 +45,7 @@ int ip_driver_read_sector(IPDriver* driver, uint32_t offset, void* buffer);
  * @param buffer Buffer containing data to write
  * @return Number of bytes written if success, -1 if failed
  */
-int ip_driver_write_sector(IPDriver* driver, uint32_t offset, const void* buffer);
+int ip_driver_write_buffer(IPDriver* driver, uint32_t offset, const void* buffer);
 
 /**
  * Close IP Driver

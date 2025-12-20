@@ -22,7 +22,7 @@
 /**
  * Structure for a FAT directory entry
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t name[8];           /**< File name (8 characters) */
     uint8_t ext[3];            /**< File extension (3 characters) */
     uint8_t attributes;        /**< File attributes */

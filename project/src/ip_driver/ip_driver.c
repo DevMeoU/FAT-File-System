@@ -34,10 +34,12 @@ int ip_driver_init(IPDriver* driver, const char* img_path) {
  * @param buffer Buffer to store read data
  * @return Number of bytes read if success, -1 if failed
  */
-int ip_driver_read_sector(IPDriver* driver, uint32_t offset, void* buffer) {
+int ip_driver_read_buffer(IPDriver* driver, uint32_t offset, void* buffer) {
     if (!driver || !driver->img_file || !buffer) return -1;
     
-    fseek(driver->img_file, offset * driver->buffer_size, SEEK_SET);
+    if (fseek(driver->img_file, offset * driver->buffer_size, SEEK_SET) != 0) {
+        return -1;
+    }
     return fread(buffer, 1, driver->buffer_size, driver->img_file);
 }
 
@@ -48,10 +50,12 @@ int ip_driver_read_sector(IPDriver* driver, uint32_t offset, void* buffer) {
  * @param buffer Buffer containing data to write
  * @return Number of bytes written if success, -1 if failed
  */
-int ip_driver_write_sector(IPDriver* driver, uint32_t offset, const void* buffer) {
+int ip_driver_write_buffer(IPDriver* driver, uint32_t offset, const void* buffer) {
     if (!driver || !driver->img_file || !buffer) return -1;
     
-    fseek(driver->img_file, offset * driver->buffer_size, SEEK_SET);
+    if (fseek(driver->img_file, offset * driver->buffer_size, SEEK_SET) != 0) {
+        return -1;
+    }
     return fwrite(buffer, 1, driver->buffer_size, driver->img_file);
 }
 

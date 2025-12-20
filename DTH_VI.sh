@@ -13,6 +13,13 @@ EXECUTABLE=$(find "$EXE_DIR" -type f -name '*.exe' 2>/dev/null | head -1)
 CONFIG_FILE="shell_config.cfg"
 PID_LOG=".processes.pid"
 
+# Detect make command
+if command -v mingw32-make >/dev/null 2>&1; then
+    MAKE_CMD="mingw32-make"
+else
+    MAKE_CMD="make"
+fi
+
 # Flags
 flag_exit=false
 
@@ -91,9 +98,9 @@ function load_image_files() {
 # -----------------------
 function init_system() {
     clear
-    [ -f "$PID_LOG" ] || touch "$PID_LOG"
     [ -d "./project" ] || { echo -e "${RED}Thư mục project không tồn tại${NC}"; exit 1; }
     cd "./project" || { echo -e "${RED}Không thể truy cập thư mục project${NC}"; exit 1; }
+    [ -f "$PID_LOG" ] || touch "$PID_LOG"
 }
 
 #------------------
@@ -132,8 +139,8 @@ function show_menu() {
     echo -e "${ORANGE}   6. ${YELLOW}All         ${NC}- Run, Build và Clean project"
     echo -e "${ORANGE}   7. ${YELLOW}Reload      ${NC}- Reload terminal"
     echo -e "${ORANGE}   8. ${YELLOW}Config      ${NC}- Thiết lập cấu hình"
-    echo -e "${ORANGE}   8. ${YELLOW}Config      ${NC}- Thiết lập cấu hình"
-    echo -e "${ORANGE}   9. ${YELLOW}Exit        ${NC}- Thoát shell"
+    echo -e "${ORANGE}   9. ${YELLOW}Thoát       ${NC}- Thoát shell"
+
 }
 
 function show_img_files() {
@@ -211,7 +218,7 @@ function handle_config_choice() {
 #------------------
 function build() {
     echo -e "${GREEN}   Đang build project...${NC}"
-    if make all; then
+    if $MAKE_CMD all; then
         echo -e "${GREEN}   Build hoàn tất!${NC}"
     else
         echo -e "${RED}   Build thất bại!${NC}"
@@ -241,14 +248,15 @@ function stop_processes() {
     local silent=$1
     [ -z "$silent" ] && echo -e "\n${ORANGE}   Đang dừng các tiến trình...${NC}"
     
-    while IFS='|' read -r pid _; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill -TERM "$pid" >/dev/null 2>&1
-            [ -z "$silent" ] && echo -e "   ${RED}Đã dừng PID: $pid${NC}"
-        fi
-    done < "$PID_LOG"
-    
-    rm -f "$PID_LOG"
+    if [ -f "$PID_LOG" ]; then
+        while IFS='|' read -r pid _; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -TERM "$pid" >/dev/null 2>&1
+                [ -z "$silent" ] && echo -e "   ${RED}Đã dừng PID: $pid${NC}"
+            fi
+        done < "$PID_LOG"
+        rm -f "$PID_LOG"
+    fi
 }
 
 function get_run_pid() {
@@ -261,7 +269,7 @@ function get_run_pid() {
 
 function clean() {
     echo -e "${GREEN}   Đang clean project...${NC}"
-    if make clean; then
+    if $MAKE_CMD clean; then
         echo -e "${GREEN}   Clean hoàn tất!${NC}"
     else
         echo -e "${RED}   Clean thất bại!${NC}"
