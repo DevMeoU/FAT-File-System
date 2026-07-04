@@ -1,162 +1,175 @@
-# Triển khai Hệ thống Tệp FAT
+# Trien khai He thong Tep FAT
 
 [![Language](https://img.shields.io/badge/Language-C11-blue.svg)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Build System](https://img.shields.io/badge/Build-Makefile-green.svg)](https://www.gnu.org/software/make/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)]()
 
-[🇺🇸 **English Version / Phiên bản Tiếng Anh**](Readme.md)
+[English Version / Phien ban Tieng Anh](Readme.md)
 
 ---
 
-## 📖 Tóm tắt
+## Tom tat
 
-Dự án này là một bản triển khai **hệ thống tệp FAT12** bằng ngôn ngữ C ở tầng người dùng (userspace), được thiết kế để chạy trên Windows/Linux. Nó mô phỏng các tương tác phần cứng cấp thấp bằng cách coi một file ảnh đĩa thô (`floppy.img`) như một thiết bị vật lý.
+Du an nay la mot ban trien khai he thong tep FAT bang ngon ngu C o tang nguoi dung, duoc thiet ke de chay tren Windows/Linux. No mo phong tuong tac phan cung cap thap bang cach coi file anh dia tho nhu mot thiet bi luu tru vat ly.
 
-Mục tiêu chính là minh họa **kiến trúc driver**, **mô hình thiết kế phân tầng**, và **thao tác hệ thống tệp thô** mà không phụ thuộc vào driver hệ thống tệp của hệ điều hành máy chủ.
+Muc tieu chinh la minh hoa kien truc driver, thiet ke phan tang, va thao tac filesystem tho ma khong phu thuoc vao driver filesystem cua host OS.
+
+## Gioi thieu du an
+
+**FAT File System Explorer** la du an C ca nhan de doc, duyet, va phan tich cac file anh FAT nhu `floppy.img` hoac ban dump phan vung FATFS cua ESP-IDF. Du an ket hop giao dien terminal voi kien truc driver phan tang, giup viec kiem tra hanh vi luu tru ro rang va de mo rong.
+
+Noi dung tu hai file `Welcome.md` va `Welcome.ini` da duoc gom vao README:
+
+- Lam viec bang terminal voi cac lenh quen thuoc nhu `ls`, `cd`, `cat`, `help`, va `evidence`.
+- Duyet va phan tich image FAT phuc vu hoc tap, debug, khoi phuc du lieu, va kiem tra cau truc filesystem.
+- Kien truc gom IP Driver, HAL, FAT Driver, Middleware, va Application.
+- Tu dong hoa build/run bang shell scripts va Makefile.
+- Cau hinh runtime gom image selection, build flags, COM port, chip, baud rate, dia chi doc flash, kich thuoc doc, va file output.
+
+Tat ca cau hinh shell va doc flash hien dung chung mot file goc: `shell_config.cfg`.
 
 ---
 
-## 📑 Mục lục
-- [Kiến trúc](#-kiến-trúc)
-  - [Thiết kế Phân tầng](#thiết-kế-phân-tầng)
-  - [Luồng Dữ liệu](#luồng-dữ-liệu)
-- [Cấu trúc Dự án](#-cấu-trúc-dự-án)
-- [Chi tiết Thành phần](#-chi-tiết-thành-phần)
-- [Biên dịch & Chạy](#-biên-dịch--chạy)
-- [Hình ảnh](#-hình-ảnh)
+## Muc luc
+
+- [Kien truc](#kien-truc)
+- [Cau truc du an](#cau-truc-du-an)
+- [Thanh phan](#thanh-phan)
+- [Bien dich va chay](#bien-dich-va-chay)
+- [Cau hinh](#cau-hinh)
+- [Hinh anh](#hinh-anh)
 
 ---
 
-## 🏗 Kiến trúc
-
-### Thiết kế Phân tầng
-Dự án tuân theo kiến trúc phân tầng nghiêm ngặt để đảm bảo tính module và tách biệt các mối quan tâm.
+## Kien truc
 
 ```mermaid
 graph TD
-    User([Người dùng]) <--> App[Tầng Ứng dụng]
-    App <--> MW[Tầng Middleware]
-    MW <--> FAT[Driver Hệ thống tệp FAT]
-    FAT <--> HAL[Tầng Trừu tượng Phần cứng]
-    HAL <--> IP[IP Driver (I/O Cấp thấp)]
-    IP <--> IMG[(floppy.img)]
+    User([Nguoi dung]) <--> App[Application Layer]
+    App <--> MW[Middleware Layer]
+    MW <--> FAT[FAT File System Driver]
+    FAT <--> HAL[Hardware Abstraction Layer]
+    HAL <--> IP[IP Driver]
+    IP <--> IMG[(disk image)]
 ```
 
-### Luồng Dữ liệu
-1.  **Application**: Người dùng yêu cầu một file (ví dụ: `cat file.txt`).
-2.  **Middleware**: Xác thực yêu cầu và điều phối hoạt động.
-3.  **FAT Driver**: Phân tích bảng FAT và Thư mục gốc để tìm các cluster.
-4.  **HAL**: Chuyển đổi các tương tác logic (sector) thành offset vật lý.
-5.  **IP Driver**: Thực hiện `fseek`/`fread` thô trên file ảnh đĩa.
+Luon du lieu:
+
+1. Application nhan lenh nguoi dung, vi du `cat file.txt`.
+2. Middleware xac thuc va dieu phoi yeu cau.
+3. FAT Driver doc boot sector, FAT table, root directory, va cluster chain.
+4. HAL chuyen sector logic thanh offset vat ly.
+5. IP Driver thuc hien `fseek`, `fread`, va `fwrite` tren file image.
 
 ---
 
-## 📂 Cấu trúc Dự án
-
-Mã nguồn được tổ chức thành các module logic trong thư mục `src`:
+## Cau truc du an
 
 ```text
 Project Root
-├── 📁 build/              # Sản phẩm sau khi build
-├── 📁 images/             # File ảnh đĩa (floppy.img)
-├── 📁 src/
-│   ├── 📁 application/    # CLI & Giao diện người dùng
-│   ├── 📁 middleware/     # Logic nghiệp vụ & Xử lý dữ liệu
-│   ├── 📁 fat_driver/     # Logic FAT12 (BootSector, FAT, RootDir)
-│   ├── 📁 hal/            # Chuyển đổi Sector-sang-Offset
-│   ├── 📁 ip_driver/      # File I/O thô (fseek, fread)
-│   ├── 📁 common/         # Các kiểu dữ liệu chung (integers, error codes)
-│   └── 📁 utilities/      # Cấu trúc dữ liệu (LinkedList, Log)
-├── CMakeLists.txt         # Cấu hình build CMake
-├── Makefile               # Cấu hình GNU Make
-└── README.md              # File tài liệu này
+|-- build/              # Build artifacts
+|-- images/             # Disk images
+|-- src/
+|   |-- application/    # CLI va giao dien nguoi dung
+|   |-- middleware/     # Xu ly lenh va du lieu hien thi
+|   |-- fat_driver/     # Logic FAT
+|   |-- hal/            # Chuyen sector sang offset
+|   |-- ip_driver/      # File I/O tho
+|   |-- common/         # Kieu du lieu chung
+|   `-- utilities/      # Linked list, logger, helper
+|-- shell_config.cfg    # Cau hinh shell va flash read duy nhat
+|-- Makefile
+`-- Readme.md
 ```
 
 ---
 
-## 🔧 Chi tiết Thành phần
+## Thanh phan
 
-<details>
-<summary><b>1. IP Driver (I/O Cấp thấp)</b></summary>
+### IP Driver
 
-Giao diện tới bộ nhớ "vật lý". Nó xử lý nghiêm ngặt các thao tác ở cấp độ byte.
-*   **Vai trò**: Mở/Đóng `floppy.img`, Đọc/Ghi byte thô tại các offset.
-*   **API chính**: `ip_driver_read`, `ip_driver_write`.
-</details>
+Mo, dong, doc, va ghi byte tho tren file image.
 
-<details>
-<summary><b>2. Hardware Abstraction Layer (HAL)</b></summary>
+### HAL
 
-Dịch các khái niệm hệ thống tệp (sector) thành khái niệm lưu trữ (offset).
-*   **Vai trò**: Định địa chỉ theo Sector (LBA).
-*   **Hoạt động**: `Offset = Sector_Index * Sector_Size`.
-</details>
+Chuyen truy cap sector thanh offset trong file image. HAL cung phat hien va xu ly ESP-IDF wear-levelling FATFS image khi co du lieu phu hop.
 
-<details>
-<summary><b>3. FAT Driver</b></summary>
+### FAT Driver
 
-Logic cốt lõi của hệ thống tệp. Nó hiểu cấu trúc đĩa.
-*   **Vai trò**: Phân tích Boot Sector, duyệt chuỗi FAT, và đọc các mục nhập thư mục.
-*   **Tính năng**: Hỗ trợ tên file dài (LFN - giới hạn), liên kết Cluster.
-</details>
+Doc cau truc FAT, quan ly cluster chain, directory entry, va thao tac file.
 
-<details>
-<summary><b>4. Middleware & Application</b></summary>
+### Middleware va Application
 
-*   **Middleware**: Cầu nối dữ liệu thô từ driver tới ứng dụng (ví dụ: chuyển buffer thành chuỗi, xử lý lỗi).
-*   **Application**: Một CLI wrapper cho phép người dùng tương tác với hệ thống (các lệnh như `ls`, `cat`).
-</details>
+Middleware chuyen du lieu driver thanh output de doc. Application cung cap shell lenh nhu `ls`, `cd`, `cat`, `help`, va `evidence`.
 
 ---
 
-## 🚀 Biên dịch & Chạy
+## Bien dich va chay
 
-### Yêu cầu tiên quyết
-*   **GCC** (MinGW cho Windows hoặc GCC gốc cho Linux)
-*   **Make**
+### Yeu cau
 
-### Biên dịch
+- GCC, MinGW tren Windows hoac GCC native tren Linux.
+- Make hoac mingw32-make.
 
-Bạn có thể build dự án bằng `Makefile` được cung cấp:
+### Bien dich
 
 ```bash
-# Build bản release (Tối ưu hóa)
 make release
-
-# Build bản debug (Kèm biểu tượng debug)
 make debug
-
-# Xóa các file build cũ
 make clean
 ```
 
-### Thực thi
-
-Chạy ứng dụng trỏ tới file ảnh đĩa của bạn:
+### Chay
 
 ```bash
-# Chạy với cài đặt mặc định
 make run
 ```
 
-Hoặc chạy thủ công:
+Hoac chay truc tiep:
+
 ```bash
 ./build/bin/main.exe images/floppy.img
 ```
 
 ---
 
-## 📸 Hình ảnh
+## Cau hinh
 
-| Liệt kê thư mục (`ls`) | Nội dung file (`cat`) |
-|:-------------------------:|:--------------------:|
+Runtime settings duoc luu trong file `shell_config.cfg` o thu muc goc. Shell menu cap nhat file nay, va cong cu quet COM ghi danh sach port tim duoc vao key `available_com_ports` trong cung file.
+
+Main menu option `9. Load Flash` doc flash bang tham so trong config va ghi dump vao `output_file`, mac dinh la `project/images/storage_dump.bin`.
+
+`menu_theme` dieu khien kieu chon menu: `number` la nhap so, `arrow` la dung phim len/xuong va Enter.
+
+```cfg
+auto_build=disabled
+auto_run=disabled
+auto_clean=enabled
+img_num=7
+menu_theme=number
+
+com_port=COM6
+available_com_ports=COM6
+chip=auto
+baud_rate=115200
+start_address=0x0
+size=0xE70000
+output_file=project/images/storage_dump.bin
+```
+
+---
+
+## Hinh anh
+
+| Liet ke thu muc (`ls`) | Noi dung file (`cat`) |
+|:----------------------:|:---------------------:|
 | ![Listing](image/README/1742297625445.png) | ![Reading](image/README/1742297655626.png) |
 
-**Giao diện chi tiết:**
 ![Detailed View](image/README/1742297708543.png)
 
 ---
 
-## 📜 Giấy phép
-Dự án này là mã nguồn mở và được phát hành dưới các điều khoản của **Giấy phép MIT**.
+## Giay phep
+
+Du an phat hanh theo giay phep MIT.

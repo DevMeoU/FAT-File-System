@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include "../common/common_types.h"
 #include "../ip_driver/ip_driver.h"
+#include "wl_layer.h"
 
 /**
  * Structure representing HAL
@@ -26,6 +27,13 @@ typedef struct {
      * Sector size
      */
     SectorSize sector_size;
+
+    /**
+     * ESP-IDF wear-levelling translation layer.
+     * When wl.enabled is true, logical sectors are remapped to their
+     * physical location inside the image (storage.bin style dumps).
+     */
+    WLLayer wl;
 } HAL;
 
 /**

@@ -8,7 +8,24 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#define strncasecmp _strnicmp
+/* MinGW hides _strnicmp under strict ANSI (-std=c99), so provide our own */
+static int win_strncasecmp(const char *s1, const char *s2, size_t n)
+{
+    while (n--) {
+        int c1 = tolower((unsigned char)*s1);
+        int c2 = tolower((unsigned char)*s2);
+        if (c1 != c2) {
+            return c1 - c2;
+        }
+        if (c1 == '\0') {
+            break;
+        }
+        s1++;
+        s2++;
+    }
+    return 0;
+}
+#define strncasecmp win_strncasecmp
 #else
 #include <termios.h>
 #include <unistd.h>

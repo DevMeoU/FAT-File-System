@@ -34,6 +34,15 @@ int hal_init(HAL* hal, const char* img_path, SectorSize sector_size) {
     
     hal->ip_driver.buffer_size = sector_size;
     hal->sector_size = sector_size;
+
+    /* Detect an ESP-IDF wear-levelled image (e.g. storage.bin partition
+     * dumps). If detected, sector reads/writes are translated through the
+     * WL layer; plain .img files keep the direct 1:1 mapping. */
+    if (wl_layer_init(&hal->wl, &hal->ip_driver) < 0) {
+        ip_driver_close(&hal->ip_driver);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -58,7 +67,17 @@ int hal_deinit(HAL* hal) {
  */
 int hal_read_sector(HAL* hal, uint32_t sector_number, void* buffer) {
     if (!hal || !buffer) return -1;
-    
+
+    if (hal->wl.enabled) {
+        uint64_t logical = (uint64_t)sector_number * (uint32_t)hal->sector_size;
+        if (logical + (uint32_t)hal->sector_size > hal->wl.flash_size) {
+            return -1; /* Beyond the usable (logical) area */
+        }
+        uint64_t physical = wl_layer_translate(&hal->wl, logical);
+        return ip_driver_read_bytes(&hal->ip_driver, physical, buffer,
+                                    (uint32_t)hal->sector_size);
+    }
+
     return ip_driver_read_buffer(&hal->ip_driver, sector_number, buffer);
 }
 
@@ -71,7 +90,17 @@ int hal_read_sector(HAL* hal, uint32_t sector_number, void* buffer) {
  */
 int hal_write_sector(HAL* hal, uint32_t sector_number, const void* buffer) {
     if (!hal || !buffer) return -1;
-    
+
+    if (hal->wl.enabled) {
+        uint64_t logical = (uint64_t)sector_number * (uint32_t)hal->sector_size;
+        if (logical + (uint32_t)hal->sector_size > hal->wl.flash_size) {
+            return -1;
+        }
+        uint64_t physical = wl_layer_translate(&hal->wl, logical);
+        return ip_driver_write_bytes(&hal->ip_driver, physical, buffer,
+                                     (uint32_t)hal->sector_size);
+    }
+
     return ip_driver_write_buffer(&hal->ip_driver, sector_number, buffer);
 }
 

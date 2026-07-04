@@ -10,7 +10,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
+#ifdef _WIN32
+/* MinGW hides strcasecmp/_stricmp under strict ANSI (-std=c99), so provide our own */
+static int win_strcasecmp(const char *s1, const char *s2)
+{
+    int c1, c2;
+    do {
+        c1 = tolower((unsigned char)*s1++);
+        c2 = tolower((unsigned char)*s2++);
+    } while (c1 != '\0' && c1 == c2);
+    return c1 - c2;
+}
+#define strcasecmp win_strcasecmp
+#else
 #include <strings.h>
+#endif
 
 /* Local functions */
 static int fat_driver_load_root_directory(FATDriver* driver);
@@ -312,10 +327,8 @@ int fat_driver_read_file(FATDriver* driver, FileNode* file, void* buffer, uint32
         
         if (!temp_buffer) return -1;
         
-        while (bytes_read < bytes_to_read && current_cluster != 0 && 
-               current_cluster != FAT12_EOC && 
-               current_cluster != FAT16_EOC && 
-               current_cluster != FAT32_EOC) {
+        while (bytes_read < bytes_to_read && current_cluster >= 2 &&
+               !fat_driver_is_eoc(driver, current_cluster)) {
             
             uint32_t first_sector_of_cluster = fat_driver_cluster_to_sector(driver, current_cluster);
             
@@ -760,7 +773,7 @@ static FileNode* fat_driver_find_in_directory(FATDriver* driver, FileNode* dir, 
         if (is_root_16) {
             if (root_current_sector_idx >= root_sectors_count) break;
         } else {
-            if (current_cluster == 0 || current_cluster >= 0x0FFFFFF8) break; // End of chain
+            if (current_cluster == 0 || fat_driver_is_eoc(driver, current_cluster)) break; // End of chain
         }
         
         uint32_t first_sector = 0;

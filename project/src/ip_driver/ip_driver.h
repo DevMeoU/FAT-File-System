@@ -48,6 +48,26 @@ int ip_driver_read_buffer(IPDriver* driver, uint32_t offset, void* buffer);
 int ip_driver_write_buffer(IPDriver* driver, uint32_t offset, const void* buffer);
 
 /**
+ * Read raw bytes at an absolute byte offset (sector-size independent)
+ * @param driver Pointer to IPDriver structure
+ * @param offset Absolute byte offset in the image file
+ * @param buffer Buffer to store read data
+ * @param size Number of bytes to read
+ * @return Number of bytes read if success, -1 if failed
+ */
+int ip_driver_read_bytes(IPDriver* driver, uint64_t offset, void* buffer, uint32_t size);
+
+/**
+ * Write raw bytes at an absolute byte offset (sector-size independent)
+ * @param driver Pointer to IPDriver structure
+ * @param offset Absolute byte offset in the image file
+ * @param buffer Buffer containing data to write
+ * @param size Number of bytes to write
+ * @return Number of bytes written if success, -1 if failed
+ */
+int ip_driver_write_bytes(IPDriver* driver, uint64_t offset, const void* buffer, uint32_t size);
+
+/**
  * Close IP Driver
  * @param driver Pointer to IPDriver structure
  */

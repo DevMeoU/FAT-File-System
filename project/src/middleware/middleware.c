@@ -24,8 +24,8 @@ int middleware_init(Middleware* middleware) {
     }
     
     const char* ext = strrchr(middleware->img_path, '.');
-    if (!ext || strcmp(ext, ".img") != 0) {
-        print_error("File is not an image file (.img): %s\n", middleware->img_path);
+    if (!ext || (strcmp(ext, ".img") != 0 && strcmp(ext, ".bin") != 0)) {
+        print_error("File is not a supported image file (.img/.bin): %s\n", middleware->img_path);
         return -1;
     }
     
