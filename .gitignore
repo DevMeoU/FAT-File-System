@@ -1,0 +1,23 @@
+# Build output
+/build/
+/project/build/
+
+# Object/dependency files
+*.o
+*.obj
+*.d
+
+# Runtime dumps and generated disk images
+/project/esp_dump.bin
+/project/images/storage_dump.bin
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local COM cache files kept out of repo; shell_config.cfg is canonical.
+/COM_ports.conf
+/project/tools/COM_ports.conf
+
+# Generated helper binary; source is project/tools/listCOM.c.
+/project/tools/showCOMavailable.exe
